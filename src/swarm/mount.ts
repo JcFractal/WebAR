@@ -79,6 +79,7 @@ export function mountSwarm(container: HTMLElement, config: ExperienceConfig): ()
     manualEnergy,
     maxPixelRatio: tuning.maxPixelRatio,
     gain: audio.gain,
+    voiceGather: audio.voiceGather,
     steadyHoldSeconds: audio.steadyHoldSeconds,
     quietSettleSeconds: audio.quietSettleSeconds,
     quietDelaySeconds: audio.quietDelaySeconds,
@@ -155,11 +156,12 @@ export function mountSwarm(container: HTMLElement, config: ExperienceConfig): ()
           timing.burstRecoverySeconds = value as number;
           break;
         case 'gain':
+        case 'voiceGather':
         case 'steadyHoldSeconds':
         case 'quietDelaySeconds':
         case 'burstThresholdDb':
         case 'burstCooldownSeconds':
-          audio[key as 'gain' | 'steadyHoldSeconds' | 'quietDelaySeconds' | 'burstThresholdDb' | 'burstCooldownSeconds'] = value as number;
+          audio[key as 'gain' | 'voiceGather' | 'steadyHoldSeconds' | 'quietDelaySeconds' | 'burstThresholdDb' | 'burstCooldownSeconds'] = value as number;
           break;
         case 'manualEnergy':
           manualEnergy = value as number;
@@ -190,7 +192,7 @@ export function mountSwarm(container: HTMLElement, config: ExperienceConfig): ()
     } else if (mode === 'live' && mic.contextState === 'suspended') {
       text = 'Sound paused. Tap anywhere to resume.';
     } else if (mode === 'live') {
-      text = 'Make a sound. Hold a steady tone to gather.';
+      text = 'Speak or hum to draw the particles in. Hold a hum to complete the shape.';
     } else {
       text = '';
     }

@@ -16,9 +16,11 @@
     "audio": {
       "gain": 1.4,
       "calibrationSeconds": 2,
-      "steadyHoldSeconds": 2,
-      "gatherSeconds": 3,
-      "quietSettleSeconds": 4,
+      "voiceGather": 0.5,
+      "steadyHoldSeconds": 0.8,
+      "gatherSeconds": 1.2,
+      "quietSettleSeconds": 2.5,
+      "quietDelaySeconds": 0.5,
       "burstCooldownSeconds": 1
     },
     "swarm": {

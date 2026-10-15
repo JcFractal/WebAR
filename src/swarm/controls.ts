@@ -4,7 +4,7 @@
  */
 export interface ControlTiming {
   gatherSeconds: number;
-  /** Rise time used instead of `gatherSeconds` while `settling` (quiet → formation). */
+  /** Release time used instead of `releaseSeconds` while `settling` (silence → drifting cloud). */
   quietSettleSeconds: number;
   releaseSeconds: number;
   burstRecoverySeconds: number;
@@ -22,7 +22,7 @@ export class SwarmControls {
 
   gatherTarget = 0;
   energyTarget = 0;
-  /** Set by the voice mapping when silence (not steady sound) is forming the shape. */
+  /** Set by the voice mapping when silence is releasing the formation. */
   settling = false;
 
   triggerBurst(strength = 1): void {
@@ -31,7 +31,7 @@ export class SwarmControls {
 
   step(dt: number, timing: ControlTiming): void {
     const rising = this.gatherTarget > this.gather;
-    const seconds = Math.max(0.05, rising ? (this.settling ? timing.quietSettleSeconds : timing.gatherSeconds) : timing.releaseSeconds);
+    const seconds = Math.max(0.05, rising ? timing.gatherSeconds : this.settling ? timing.quietSettleSeconds : timing.releaseSeconds);
     const delta = dt / seconds;
     this.gather = rising ? Math.min(this.gatherTarget, this.gather + delta) : Math.max(this.gatherTarget, this.gather - delta);
     this.gather = clamp01(this.gather);
@@ -40,6 +40,6 @@ export class SwarmControls {
     this.burst *= Math.exp((-3 * dt) / Math.max(0.05, timing.burstRecoverySeconds));
     if (this.burst < 1e-4) this.burst = 0;
 
-    this.energy += (clamp01(this.energyTarget) - this.energy) * (1 - Math.exp(-dt * 4));
+    this.energy += (clamp01(this.energyTarget) - this.energy) * (1 - Math.exp(-dt * 12));
   }
 }

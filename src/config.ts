@@ -41,13 +41,15 @@ export interface AudioSettings {
   /** Sensitivity: multiplies the level above the noise floor. */
   gain: number;
   calibrationSeconds: number;
-  /** Steady sound must last this long before the formation starts gathering. */
+  /** Formation strength (0..1) that ordinary voice pulls toward immediately. */
+  voiceGather: number;
+  /** Steady sound held this long strengthens the pull from `voiceGather` to the full formation. */
   steadyHoldSeconds: number;
-  /** Time for steady sound to gather the formation fully. */
+  /** Time for the formation blend to rise from cloud to full formation. */
   gatherSeconds: number;
-  /** Time for silence to settle into the formation. */
+  /** Time for silence to release the formation into the drifting cloud. */
   quietSettleSeconds: number;
-  /** Silence must last this long before settling starts, so pauses between syllables do not form it. */
+  /** Silence must last this long before the release starts, so pauses between syllables keep the shape. */
   quietDelaySeconds: number;
   burstCooldownSeconds: number;
   /** Jump in level (dB) over the recent average that counts as a sharp onset. */
@@ -66,10 +68,11 @@ export interface AudioSettings {
 export const AUDIO_DEFAULTS: AudioSettings = {
   gain: 1.4,
   calibrationSeconds: 2,
-  steadyHoldSeconds: 2,
-  gatherSeconds: 3,
-  quietSettleSeconds: 4,
-  quietDelaySeconds: 1.2,
+  voiceGather: 0.5,
+  steadyHoldSeconds: 0.8,
+  gatherSeconds: 1.2,
+  quietSettleSeconds: 2.5,
+  quietDelaySeconds: 0.5,
   burstCooldownSeconds: 1,
   burstThresholdDb: 15,
   burstMinEnergy: 0.45,
@@ -82,7 +85,8 @@ export const AUDIO_DEFAULTS: AudioSettings = {
 const AUDIO_RANGES: Record<keyof AudioSettings, [number, number]> = {
   gain: [0.1, 10],
   calibrationSeconds: [0.5, 10],
-  steadyHoldSeconds: [0.2, 10],
+  voiceGather: [0, 1],
+  steadyHoldSeconds: [0.1, 10],
   gatherSeconds: [0.2, 15],
   quietSettleSeconds: [0.2, 20],
   quietDelaySeconds: [0, 10],

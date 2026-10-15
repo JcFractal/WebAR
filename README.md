@@ -2,7 +2,19 @@
 
 A small WebAR player that loads experiences from static JSON configs (`/?exp=<id>`). See [`SPEC.md`](SPEC.md) (authoritative scope) and [`DEVIN_RUNBOOK.md`](DEVIN_RUNBOOK.md) (milestones).
 
-**Status:** milestone 1 — player, config loader, and a Three.js placeholder. No swarm, microphone, camera, or AR yet.
+**Status:** milestone 2 — shared particle swarm with Manual controls. No microphone, camera, or AR yet.
+
+## Swarm (milestone 2)
+
+One shared engine in `src/swarm/` renders every experience as a single `THREE.Points` cloud (typed arrays, O(n) update, soft additive point sprites).
+
+- `controls.ts` — normalized `energy`, `gather`, `burst` (0–1). The Manual buttons drive these now; the microphone will drive the same values in milestone 3.
+- `formations.ts` — procedural `flower` and `rings` targets.
+- `motion.ts` — `garden` and `vortex` drift presets.
+- `swarm.ts` — blends drift → formation by `gather`, adds a bounded, decaying `burst` impulse.
+- `ui.ts` / `mount.ts` — HUD (Manual badge, Drift / Gather / Burst, Fullscreen, Tune panel, optional FPS readout), resize, and the single `renderer.setAnimationLoop`.
+
+Add `&debug` to a player URL to expose `window.__webar` (control state, frame count, current max radius) for testing.
 
 Stack: Vite + vanilla TypeScript + Three.js. Versions are pinned in `package.json` / `package-lock.json`.
 
@@ -30,7 +42,9 @@ npm run preview   # serve dist/ at http://localhost:4173
 1. Add `public/experiences/<id>.json` (`id` must match the filename; lowercase letters, numbers, dashes).
 2. Add `{ "id": "<id>", "title": "<Title>" }` to `public/manifest.json`. IDs not listed there are rejected before any fetch.
 
-Validated fields: `id`, `template` (`swarm`), `title`, `settings.particleCount` (integer 1–10000), `settings.palette` (`#RRGGBB` list), `settings.motionPreset`, `settings.formation`, `settings.diameterMeters`, `settings.heightAboveSurfaceMeters`. `settings.audio` and `brand` are accepted now and used in later milestones.
+Validated fields: `id`, `template` (`swarm`), `title`, `settings.particleCount` (integer 1–10000), `settings.palette` (`#RRGGBB` list), `settings.motionPreset`, `settings.formation`, `settings.diameterMeters`, `settings.heightAboveSurfaceMeters`. `motionPreset` is `garden` or `vortex`; `formation` is `flower` or `rings`.
+
+Optional `settings.swarm` tuning (defaults in `src/config.ts`): `pointSize` (0.002–0.05 m), `brightness` (0.1–3), `burstStrength` (0–1.5), `burstRecoverySeconds` (0.2–10), `releaseSeconds` (0.2–20), `maxPixelRatio` (0.5–3). `settings.audio` and `brand` are accepted now and used in later milestones.
 
 ## Vercel
 

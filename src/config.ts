@@ -1,5 +1,37 @@
 export const TEMPLATES = ['swarm'] as const;
 export type TemplateId = (typeof TEMPLATES)[number];
+export const MOTION_PRESETS = ['garden', 'vortex'] as const;
+export type MotionPresetId = (typeof MOTION_PRESETS)[number];
+export const FORMATIONS = ['flower', 'rings'] as const;
+export type FormationId = (typeof FORMATIONS)[number];
+
+/** Optional visual tuning; every field has a default in `SWARM_DEFAULTS`. */
+export interface SwarmTuning {
+  pointSize: number;
+  brightness: number;
+  burstStrength: number;
+  burstRecoverySeconds: number;
+  releaseSeconds: number;
+  maxPixelRatio: number;
+}
+
+export const SWARM_DEFAULTS: SwarmTuning = {
+  pointSize: 0.012,
+  brightness: 1,
+  burstStrength: 0.45,
+  burstRecoverySeconds: 1.5,
+  releaseSeconds: 3,
+  maxPixelRatio: 2,
+};
+
+const SWARM_RANGES: Record<keyof SwarmTuning, [number, number]> = {
+  pointSize: [0.002, 0.05],
+  brightness: [0.1, 3],
+  burstStrength: [0, 1.5],
+  burstRecoverySeconds: [0.2, 10],
+  releaseSeconds: [0.2, 20],
+  maxPixelRatio: [0.5, 3],
+};
 
 export interface ManifestEntry {
   id: string;
@@ -9,11 +41,12 @@ export interface ManifestEntry {
 export interface SwarmSettings {
   particleCount: number;
   palette: string[];
-  motionPreset: string;
-  formation: string;
+  motionPreset: MotionPresetId;
+  formation: FormationId;
   diameterMeters: number;
   heightAboveSurfaceMeters: number;
-  audio?: Record<string, number>;
+  audio?: Partial<Record<string, number>>;
+  swarm?: Partial<SwarmTuning>;
 }
 
 export interface ExperienceConfig {
@@ -102,11 +135,34 @@ export function validateExperience(data: unknown, expectedId: string): Experienc
     if (!Array.isArray(s.palette) || s.palette.length === 0 || !s.palette.every((c) => typeof c === 'string' && HEX_COLOR.test(c))) {
       problems.push('"settings.palette" must be a non-empty list of #RRGGBB colors');
     }
-    if (!isNonEmptyString(s.motionPreset)) problems.push('"settings.motionPreset" must be a non-empty string');
-    if (!isNonEmptyString(s.formation)) problems.push('"settings.formation" must be a non-empty string');
+    if (!MOTION_PRESETS.includes(s.motionPreset as MotionPresetId)) {
+      problems.push(`"settings.motionPreset" must be one of: ${MOTION_PRESETS.join(', ')}`);
+    }
+    if (!FORMATIONS.includes(s.formation as FormationId)) {
+      problems.push(`"settings.formation" must be one of: ${FORMATIONS.join(', ')}`);
+    }
     if (!isPositiveNumber(s.diameterMeters)) problems.push('"settings.diameterMeters" must be a positive number');
     if (typeof s.heightAboveSurfaceMeters !== 'number' || !Number.isFinite(s.heightAboveSurfaceMeters)) {
       problems.push('"settings.heightAboveSurfaceMeters" must be a number');
+    }
+    if (s.audio !== undefined) {
+      if (!isObject(s.audio) || !Object.values(s.audio).every(isPositiveNumber)) {
+        problems.push('"settings.audio" must be an object of positive numbers');
+      }
+    }
+    if (s.swarm !== undefined) {
+      if (!isObject(s.swarm)) {
+        problems.push('"settings.swarm" must be an object when present');
+      } else {
+        for (const [key, value] of Object.entries(s.swarm)) {
+          const range = SWARM_RANGES[key as keyof SwarmTuning];
+          if (!range) {
+            problems.push(`"settings.swarm.${key}" is not a known setting`);
+          } else if (typeof value !== 'number' || !Number.isFinite(value) || value < range[0] || value > range[1]) {
+            problems.push(`"settings.swarm.${key}" must be a number from ${range[0]} to ${range[1]}`);
+          }
+        }
+      }
     }
   }
 

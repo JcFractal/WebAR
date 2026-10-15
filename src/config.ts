@@ -33,6 +33,68 @@ const SWARM_RANGES: Record<keyof SwarmTuning, [number, number]> = {
   maxPixelRatio: [0.5, 3],
 };
 
+/**
+ * Voice-mapping settings (`settings.audio`). Every field has a default in `AUDIO_DEFAULTS`;
+ * values are starting points for on-site tuning, not validated measurements.
+ */
+export interface AudioSettings {
+  /** Sensitivity: multiplies the level above the noise floor. */
+  gain: number;
+  calibrationSeconds: number;
+  /** Steady sound must last this long before the formation starts gathering. */
+  steadyHoldSeconds: number;
+  /** Time for steady sound to gather the formation fully. */
+  gatherSeconds: number;
+  /** Time for silence to settle into the formation. */
+  quietSettleSeconds: number;
+  /** Silence must last this long before settling starts, so pauses between syllables do not form it. */
+  quietDelaySeconds: number;
+  burstCooldownSeconds: number;
+  /** Jump in level (dB) over the recent average that counts as a sharp onset. */
+  burstThresholdDb: number;
+  /** Minimum energy (0..1) for an onset to burst, so quiet clicks are ignored. */
+  burstMinEnergy: number;
+  /** dB above the noise floor that maps to full energy (before gain). */
+  dynamicRangeDb: number;
+  /** Energy hysteresis: sound starts above `enterThreshold`, ends below `exitThreshold`. */
+  enterThreshold: number;
+  exitThreshold: number;
+  /** Steadiness (0..1) required for sound to count as steady. */
+  steadyThreshold: number;
+}
+
+export const AUDIO_DEFAULTS: AudioSettings = {
+  gain: 1.4,
+  calibrationSeconds: 2,
+  steadyHoldSeconds: 2,
+  gatherSeconds: 3,
+  quietSettleSeconds: 4,
+  quietDelaySeconds: 1.2,
+  burstCooldownSeconds: 1,
+  burstThresholdDb: 15,
+  burstMinEnergy: 0.45,
+  dynamicRangeDb: 48,
+  enterThreshold: 0.2,
+  exitThreshold: 0.1,
+  steadyThreshold: 0.6,
+};
+
+const AUDIO_RANGES: Record<keyof AudioSettings, [number, number]> = {
+  gain: [0.1, 10],
+  calibrationSeconds: [0.5, 10],
+  steadyHoldSeconds: [0.2, 10],
+  gatherSeconds: [0.2, 15],
+  quietSettleSeconds: [0.2, 20],
+  quietDelaySeconds: [0, 10],
+  burstCooldownSeconds: [0.1, 10],
+  burstThresholdDb: [3, 40],
+  burstMinEnergy: [0, 1],
+  dynamicRangeDb: [10, 80],
+  enterThreshold: [0.01, 0.9],
+  exitThreshold: [0, 0.9],
+  steadyThreshold: [0.1, 0.99],
+};
+
 export interface ManifestEntry {
   id: string;
   title: string;
@@ -45,7 +107,7 @@ export interface SwarmSettings {
   formation: FormationId;
   diameterMeters: number;
   heightAboveSurfaceMeters: number;
-  audio?: Partial<Record<string, number>>;
+  audio?: Partial<AudioSettings>;
   swarm?: Partial<SwarmTuning>;
 }
 
@@ -145,25 +207,13 @@ export function validateExperience(data: unknown, expectedId: string): Experienc
     if (typeof s.heightAboveSurfaceMeters !== 'number' || !Number.isFinite(s.heightAboveSurfaceMeters)) {
       problems.push('"settings.heightAboveSurfaceMeters" must be a number');
     }
-    if (s.audio !== undefined) {
-      if (!isObject(s.audio) || !Object.values(s.audio).every(isPositiveNumber)) {
-        problems.push('"settings.audio" must be an object of positive numbers');
-      }
+    if (s.audio !== undefined) checkRanges('settings.audio', s.audio, AUDIO_RANGES, problems);
+    if (isObject(s.audio)) {
+      const enter = (s.audio.enterThreshold as number | undefined) ?? AUDIO_DEFAULTS.enterThreshold;
+      const exit = (s.audio.exitThreshold as number | undefined) ?? AUDIO_DEFAULTS.exitThreshold;
+      if (exit >= enter) problems.push('"settings.audio.exitThreshold" must be lower than "enterThreshold"');
     }
-    if (s.swarm !== undefined) {
-      if (!isObject(s.swarm)) {
-        problems.push('"settings.swarm" must be an object when present');
-      } else {
-        for (const [key, value] of Object.entries(s.swarm)) {
-          const range = SWARM_RANGES[key as keyof SwarmTuning];
-          if (!range) {
-            problems.push(`"settings.swarm.${key}" is not a known setting`);
-          } else if (typeof value !== 'number' || !Number.isFinite(value) || value < range[0] || value > range[1]) {
-            problems.push(`"settings.swarm.${key}" must be a number from ${range[0]} to ${range[1]}`);
-          }
-        }
-      }
-    }
+    if (s.swarm !== undefined) checkRanges('settings.swarm', s.swarm, SWARM_RANGES, problems);
   }
 
   if (data.brand !== undefined && !isObject(data.brand)) problems.push('"brand" must be an object when present');
@@ -184,4 +234,19 @@ export async function loadExperience(id: string): Promise<ExperienceConfig> {
   }
   const data = await fetchJson(`experiences/${id}.json`, `Experience "${id}"`);
   return validateExperience(data, id);
+}
+
+function checkRanges(path: string, value: unknown, ranges: Record<string, [number, number]>, problems: string[]): void {
+  if (!isObject(value)) {
+    problems.push(`"${path}" must be an object when present`);
+    return;
+  }
+  for (const [key, v] of Object.entries(value)) {
+    const range = ranges[key];
+    if (!range) {
+      problems.push(`"${path}.${key}" is not a known setting`);
+    } else if (typeof v !== 'number' || !Number.isFinite(v) || v < range[0] || v > range[1]) {
+      problems.push(`"${path}.${key}" must be a number from ${range[0]} to ${range[1]}`);
+    }
+  }
 }

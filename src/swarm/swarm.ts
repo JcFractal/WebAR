@@ -167,7 +167,9 @@ export class Swarm {
     const f = this.formation;
     const ct = Math.cos(f.tilt);
     const st = Math.sin(f.tilt);
-    const scale = this.opts.radius * (1 + 0.06 * energy);
+    const scale = this.opts.radius * (1 + 0.04 * energy);
+    const turb = controls.turbulence * tuning.turbulenceStrength;
+    const ripple = energy * tuning.rippleStrength;
     const tmp = this.tmp;
     const pos = this.positions;
 
@@ -180,6 +182,20 @@ export class Swarm {
       let x = tmp[0] + (fr * Math.cos(ang) - tmp[0]) * g;
       let y = tmp[1] + (fr * Math.sin(ang) - tmp[1]) * g;
       let z = tmp[2] + (f.z[i] - tmp[2]) * g;
+
+      // Ripples travel outward with sound level; turbulence churns each particle on its own phase.
+      if (ripple > 1e-4) {
+        const k = 1 + ripple * Math.sin(Math.hypot(x, y, z) * 14 - t * 6);
+        x *= k;
+        y *= k;
+        z *= k;
+      }
+      if (turb > 1e-4) {
+        const p = this.jitter[i] * 6.2832 + i * 0.618;
+        x += turb * Math.sin(t * 4.3 + p);
+        y += turb * Math.sin(t * 3.7 + p * 1.3);
+        z += turb * Math.sin(t * 5.1 + p * 1.7);
+      }
 
       if (bs > 1e-4) {
         const j = this.jitter[i];

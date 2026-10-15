@@ -13,6 +13,10 @@ export interface SwarmTuning {
   burstRecoverySeconds: number;
   releaseSeconds: number;
   maxPixelRatio: number;
+  /** Displacement (fraction of radius) at full turbulence. */
+  turbulenceStrength: number;
+  /** Radial ripple depth at full energy. */
+  rippleStrength: number;
 }
 
 export const SWARM_DEFAULTS: SwarmTuning = {
@@ -22,6 +26,8 @@ export const SWARM_DEFAULTS: SwarmTuning = {
   burstRecoverySeconds: 1.5,
   releaseSeconds: 3,
   maxPixelRatio: 2,
+  turbulenceStrength: 0.14,
+  rippleStrength: 0.05,
 };
 
 const SWARM_RANGES: Record<keyof SwarmTuning, [number, number]> = {
@@ -31,6 +37,8 @@ const SWARM_RANGES: Record<keyof SwarmTuning, [number, number]> = {
   burstRecoverySeconds: [0.2, 10],
   releaseSeconds: [0.2, 20],
   maxPixelRatio: [0.5, 3],
+  turbulenceStrength: [0, 0.6],
+  rippleStrength: [0, 0.3],
 };
 
 /**
@@ -41,15 +49,17 @@ export interface AudioSettings {
   /** Sensitivity: multiplies the level above the noise floor. */
   gain: number;
   calibrationSeconds: number;
-  /** Formation strength (0..1) that ordinary voice pulls toward immediately. */
-  voiceGather: number;
-  /** Steady sound held this long strengthens the pull from `voiceGather` to the full formation. */
+  /** Slight coherence (0..1) from soft speech; loud varying speech turns into turbulence instead. */
+  speechCoherence: number;
+  /** Tonality (0..1) around which a sound counts as tonal; noise-like sound below it barely forms the shape. */
+  tonalThreshold: number;
+  /** Time constant for a steady tonal sound to build coherence. */
   steadyHoldSeconds: number;
   /** Time for the formation blend to rise from cloud to full formation. */
   gatherSeconds: number;
-  /** Time for silence to release the formation into the drifting cloud. */
+  /** Time for silence to relax the formation into the drifting cloud. */
   quietSettleSeconds: number;
-  /** Silence must last this long before the release starts, so pauses between syllables keep the shape. */
+  /** Silence shorter than this (a breath) keeps the current shape. */
   quietDelaySeconds: number;
   burstCooldownSeconds: number;
   /** Jump in level (dB) over the recent average that counts as a sharp onset. */
@@ -68,24 +78,26 @@ export interface AudioSettings {
 export const AUDIO_DEFAULTS: AudioSettings = {
   gain: 1.4,
   calibrationSeconds: 2,
-  voiceGather: 0.5,
+  speechCoherence: 0.2,
+  tonalThreshold: 0.5,
   steadyHoldSeconds: 0.8,
   gatherSeconds: 1.2,
-  quietSettleSeconds: 2.5,
-  quietDelaySeconds: 0.5,
+  quietSettleSeconds: 3,
+  quietDelaySeconds: 0.7,
   burstCooldownSeconds: 1,
   burstThresholdDb: 15,
   burstMinEnergy: 0.45,
   dynamicRangeDb: 48,
-  enterThreshold: 0.2,
-  exitThreshold: 0.1,
+  enterThreshold: 0.12,
+  exitThreshold: 0.06,
   steadyThreshold: 0.6,
 };
 
 const AUDIO_RANGES: Record<keyof AudioSettings, [number, number]> = {
   gain: [0.1, 10],
   calibrationSeconds: [0.5, 10],
-  voiceGather: [0, 1],
+  speechCoherence: [0, 1],
+  tonalThreshold: [0.05, 0.95],
   steadyHoldSeconds: [0.1, 10],
   gatherSeconds: [0.2, 15],
   quietSettleSeconds: [0.2, 20],

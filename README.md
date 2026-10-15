@@ -10,15 +10,17 @@ A small WebAR player that loads experiences from static JSON configs (`/?exp=<id
 
 - `src/audio/mic.ts` — `MicInput`: one stream at a time (repeat taps reuse the pending request), refusal / missing device / busy / unsupported states with Retry, cleanup on Stop sound and page exit.
 - `src/audio/analysis.ts` — `VoiceAnalyzer` (pure, deterministic): RMS → dB above the calibrated noise floor → `energy`; envelope variation → `steadiness`; onset above the recent peak → `burst`.
-  - Any sound above `enterThreshold` (hysteresis down to `exitThreshold`) immediately pulls toward the formation at strength `voiceGather`; energy also brightens and enlarges the points.
-  - Steady sound (steadiness ≥ `steadyThreshold`) raises that pull to the full formation over `steadyHoldSeconds`. The blend moves at most 1 / `gatherSeconds` per second.
-  - Silence for `quietDelaySeconds` releases the formation into the drifting cloud over `quietSettleSeconds`; shorter pauses keep the previous target.
+  - Continuous mapping; energy (motion) is separate from coherence (formation).
+  - `energy` immediately drives brightness, point size and outward ripples (`swarm.rippleStrength`).
+  - `turbulence` = loudness × unsteadiness: loud, varying speech churns the cloud (`swarm.turbulenceStrength`) without forming it.
+  - Coherence target = max(soft speech → up to `speechCoherence`, steadiness × tonality × loudness). Tonality is spectral flatness (90 Hz–3 kHz, 2048-point FFT) after removing the calibrated noise spectrum, compared to `tonalThreshold`. A soft hum holds an intermediate shape, a full hum completes it, and a wavering hum loosens it. Steady broadband noise stays low. Coherence builds with time constant `steadyHoldSeconds`; the blend moves at most 1 / `gatherSeconds` per second.
+  - Silence shorter than `quietDelaySeconds` (a breath) keeps the shape; longer silence relaxes it over `quietSettleSeconds`.
   - A jump of `burstThresholdDb` over the recent peak, with energy ≥ `burstMinEnergy`, triggers one burst, then waits `burstCooldownSeconds`.
 - Calibration runs automatically on the first Enable sound (stay quiet ~2 s) and again from Diagnostics → Calibrate. The noise floor is the 90th percentile of the measured level.
 
 **Live / Manual:** the badge shows the active input. In Live mode the microphone writes `SwarmControls`; in Manual mode Drift / Gather / Burst write the same controls. If the microphone is refused or lost, the player falls back to Manual. **Diagnostics** shows mic status, energy, level, noise floor, steadiness, gather, state, and frame rate, plus Sensitivity, Calibrate, Retry mic, and Stop sound.
 
-This is a sound-level heuristic, not speech recognition: any sound draws the particles in, and any steady sound (humming, a held vowel, music, loud room noise) can complete the formation.
+This is a sound-level heuristic, not speech recognition: any steady tonal sound (humming, a held vowel, a sustained note or steady music) can complete the formation.
 
 ## Swarm (milestone 2)
 
@@ -62,7 +64,7 @@ Validated fields: `id`, `template` (`swarm`), `title`, `settings.particleCount` 
 
 Optional `settings.swarm` tuning (defaults in `src/config.ts`): `pointSize` (0.002–0.05 m), `brightness` (0.1–3), `burstStrength` (0–1.5), `burstRecoverySeconds` (0.2–10), `releaseSeconds` (0.2–20), `maxPixelRatio` (0.5–3). `brand` is accepted for later milestones.
 
-Optional `settings.audio` (defaults in `AUDIO_DEFAULTS`, `src/config.ts`; starting points to tune on site): `gain` 1.4 (sensitivity, 0.1–10), `calibrationSeconds` 2, `voiceGather` 0.5 (0–1), `steadyHoldSeconds` 0.8, `gatherSeconds` 1.2, `quietSettleSeconds` 2.5, `quietDelaySeconds` 0.5, `burstCooldownSeconds` 1, `burstThresholdDb` 15, `burstMinEnergy` 0.45, `dynamicRangeDb` 48, `enterThreshold` 0.2, `exitThreshold` 0.1 (must be below enter), `steadyThreshold` 0.6. Unknown keys and out-of-range values are rejected.
+Optional `settings.audio` (defaults in `AUDIO_DEFAULTS`, `src/config.ts`; starting points to tune on site): `gain` 1.4 (sensitivity, 0.1–10), `calibrationSeconds` 2, `speechCoherence` 0.2, `tonalThreshold` 0.5, `steadyHoldSeconds` 0.8, `gatherSeconds` 1.2, `quietSettleSeconds` 3, `quietDelaySeconds` 0.7, `burstCooldownSeconds` 1, `burstThresholdDb` 15, `burstMinEnergy` 0.45, `dynamicRangeDb` 48, `enterThreshold` 0.12, `exitThreshold` 0.06 (must be below enter), `steadyThreshold` 0.6. Unknown keys and out-of-range values are rejected.
 
 ## Vercel
 

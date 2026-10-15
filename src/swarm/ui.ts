@@ -16,7 +16,10 @@ export interface TuneValues {
   manualEnergy: number;
   maxPixelRatio: number;
   gain: number;
-  voiceGather: number;
+  speechCoherence: number;
+  tonalThreshold: number;
+  turbulenceStrength: number;
+  rippleStrength: number;
   steadyHoldSeconds: number;
   quietSettleSeconds: number;
   quietDelaySeconds: number;
@@ -31,6 +34,8 @@ export interface DiagValues {
   floorDb: number;
   calibrated: boolean;
   steadiness: number;
+  tonality: number;
+  turbulence: number;
   gather: number;
   state: string;
   fps: number;
@@ -171,11 +176,14 @@ export function createHud(container: HTMLElement, initial: TuneValues, h: HudHan
   addSlider(panel, 'releaseSeconds', 'Release time (s)', 0.5, 8, 0.25);
   addSlider(panel, 'maxPixelRatio', 'Render scale cap', 0.75, 3, 0.25);
   panel.append(el('p', 'panel-heading', 'Sound response'));
-  addSlider(panel, 'voiceGather', 'Voice pull', 0, 1, 0.05);
-  addSlider(panel, 'steadyHoldSeconds', 'Hum hold (s)', 0.1, 4, 0.1, 1);
+  addSlider(panel, 'turbulenceStrength', 'Turbulence', 0, 0.6, 0.02);
+  addSlider(panel, 'rippleStrength', 'Ripple', 0, 0.3, 0.01);
+  addSlider(panel, 'speechCoherence', 'Speech shaping', 0, 1, 0.05);
+  addSlider(panel, 'tonalThreshold', 'Tonal threshold', 0.05, 0.95, 0.05);
+  addSlider(panel, 'steadyHoldSeconds', 'Hum build (s)', 0.1, 4, 0.1, 1);
   addSlider(panel, 'gatherSeconds', 'Gather time (s)', 0.2, 6, 0.1, 1);
   addSlider(panel, 'quietDelaySeconds', 'Quiet delay (s)', 0, 3, 0.1, 1);
-  addSlider(panel, 'quietSettleSeconds', 'Quiet release (s)', 0.5, 10, 0.25);
+  addSlider(panel, 'quietSettleSeconds', 'Quiet relax (s)', 0.5, 10, 0.25);
   addSlider(panel, 'burstThresholdDb', 'Burst threshold (dB)', 5, 35, 1, 0);
   addSlider(panel, 'burstCooldownSeconds', 'Burst cooldown (s)', 0.2, 4, 0.1, 1);
   panel.append(el('p', 'panel-heading', 'Manual test'));
@@ -183,7 +191,7 @@ export function createHud(container: HTMLElement, initial: TuneValues, h: HudHan
 
   const stats = el('dl', 'diag-stats');
   const statValues = new Map<string, HTMLElement>();
-  for (const label of ['Mic', 'Input', 'Energy', 'Level', 'Noise floor', 'Steadiness', 'Gather', 'State', 'Frame rate']) {
+  for (const label of ['Mic', 'Input', 'Energy', 'Level', 'Noise floor', 'Steadiness', 'Tonality', 'Turbulence', 'Gather', 'State', 'Frame rate']) {
     const dd = el('dd', '', '–');
     stats.append(el('dt', '', label), dd);
     statValues.set(label, dd);
@@ -200,8 +208,8 @@ export function createHud(container: HTMLElement, initial: TuneValues, h: HudHan
     el(
       'p',
       'diag-note',
-      'Voice draws the particles in; a steady sound (humming, a held vowel, music, or loud room noise) completes the shape; silence releases it. ' +
-        'It responds to sound level and steadiness only; it does not recognize words.',
+      'Louder, varied sound adds motion; a steady tonal sound (humming, a held vowel, a sustained note) builds the shape; silence relaxes it. ' +
+        'It measures level, steadiness and tonality only; it does not recognize words, and steady music can also form the shape.',
     ),
   );
 
@@ -306,6 +314,8 @@ export function createHud(container: HTMLElement, initial: TuneValues, h: HudHan
       set('Level', `${d.levelDb.toFixed(0)} dBFS`);
       set('Noise floor', d.calibrated ? `${d.floorDb.toFixed(0)} dBFS` : `${d.floorDb.toFixed(0)} dBFS (not calibrated)`);
       set('Steadiness', pct(d.steadiness));
+      set('Tonality', pct(d.tonality));
+      set('Turbulence', pct(d.turbulence));
       set('Gather', pct(d.gather));
       set('State', d.state);
       set('Frame rate', `${Math.round(d.fps)} FPS`);

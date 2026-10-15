@@ -1,5 +1,6 @@
 {
   "experiences": [
-    { "id": "neon-garden", "title": "Neon Garden" }
+    { "id": "neon-garden", "title": "Neon Garden" },
+    { "id": "cosmic-vortex", "title": "Cosmic Vortex" }
   ]
 }

@@ -1,5 +1,6 @@
 import './style.css';
 import { ExperienceLoadError, loadExperience, loadManifest } from './config';
+import { publicExperienceUrl } from './site';
 import { templateRegistry } from './templates';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -18,12 +19,6 @@ function galleryUrl(): string {
   return url.toString();
 }
 
-function experienceUrl(id: string): string {
-  const url = new URL(galleryUrl());
-  url.searchParams.set('exp', id);
-  return url.toString();
-}
-
 function galleryLink(label = 'Back to gallery'): HTMLAnchorElement {
   const a = el('a', 'button', label);
   a.href = galleryUrl();
@@ -39,11 +34,24 @@ async function showEntry(): Promise<void> {
   try {
     const experiences = await loadManifest();
     const list = el('ul', 'experience-list');
+    const QRCode = (await import('qrcode')).default;
     for (const exp of experiences) {
-      const item = el('li');
+      // Link and QR share one payload from the documented public base URL.
+      const url = publicExperienceUrl(exp.id);
+      const item = el('li', 'experience-card');
       const link = el('a', 'card', exp.title);
-      link.href = experienceUrl(exp.id);
-      item.append(link);
+      link.href = url;
+      const qr = el('div', 'qr');
+      qr.dataset.payload = url;
+      qr.setAttribute('role', 'img');
+      qr.setAttribute('aria-label', `QR code for ${exp.title}`);
+      qr.innerHTML = await QRCode.toString(url, { type: 'svg', margin: 2, errorCorrectionLevel: 'M' });
+      const urlText = el('a', 'qr-url', url);
+      urlText.href = url;
+      const download = el('a', 'qr-download', 'Download QR (PNG)');
+      download.href = await QRCode.toDataURL(url, { width: 768, margin: 2, errorCorrectionLevel: 'M' });
+      download.download = `${exp.id}-qr.png`;
+      item.append(link, qr, urlText, download);
       list.append(item);
     }
     if (experiences.length === 0) page.append(el('p', 'muted', 'No experiences are published yet.'));

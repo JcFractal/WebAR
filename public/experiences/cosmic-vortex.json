@@ -1,0 +1,40 @@
+{
+  "id": "cosmic-vortex",
+  "template": "swarm",
+  "title": "Cosmic Vortex",
+  "settings": {
+    "particleCount": 3000,
+    "palette": [
+      "#9B5CFF",
+      "#3D7BFF",
+      "#FFB341"
+    ],
+    "motionPreset": "vortex",
+    "formation": "rings",
+    "diameterMeters": 0.8,
+    "heightAboveSurfaceMeters": 0.6,
+    "audio": {
+      "gain": 1.4,
+      "calibrationSeconds": 2,
+      "speechCoherence": 0.2,
+      "tonalThreshold": 0.5,
+      "steadyHoldSeconds": 0.8,
+      "gatherSeconds": 1.2,
+      "quietSettleSeconds": 3,
+      "quietDelaySeconds": 0.7,
+      "burstCooldownSeconds": 1
+    },
+    "swarm": {
+      "pointSize": 0.011,
+      "brightness": 1.1,
+      "burstStrength": 0.55,
+      "burstRecoverySeconds": 1.5,
+      "releaseSeconds": 3,
+      "maxPixelRatio": 2
+    }
+  },
+  "brand": {
+    "name": "JC Fractal",
+    "accent": "#9B5CFF"
+  }
+}

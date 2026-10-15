@@ -51,7 +51,7 @@ npm run preview   # serve dist/ at http://localhost:4173
 
 | URL | Shows |
 |---|---|
-| `/` | Entry page listing experiences from `public/manifest.json` (becomes the QR gallery later) |
+| `/` | Gallery: one card per `public/manifest.json` entry with a link, a QR code, and a downloadable QR PNG |
 | `/?exp=neon-garden` | Neon Garden player |
 | `/?exp=<unknown or malformed>` | Error message with a link back to the gallery; never falls back to another experience |
 
@@ -76,4 +76,4 @@ Static Vite build, no backend or secrets. `vercel.json` pins these settings:
 - Output directory: `dist`
 - Production branch: `main`
 
-Use the project's stable production `*.vercel.app` domain for demo links and QR codes, and confirm it opens signed-out (preview deployments may be protected by Vercel Deployment Protection).
+Gallery links and QR codes use the single public base URL in `src/site.ts` (`https://web-ar-gold.vercel.app/`, override with `VITE_PUBLIC_BASE_URL` at build time), so new deployments on the same domain don't need reprinted QRs. Use the project's stable production `*.vercel.app` domain for demo links and QR codes, and confirm it opens signed-out (preview deployments may be protected by Vercel Deployment Protection).

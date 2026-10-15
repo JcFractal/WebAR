@@ -4,6 +4,7 @@ import { MicInput, type MicStatus } from '../audio/mic';
 import { AUDIO_DEFAULTS, SWARM_DEFAULTS, type AudioSettings, type ExperienceConfig, type SwarmTuning } from '../config';
 import { SwarmControls, type ControlTiming } from './controls';
 import { Swarm } from './swarm';
+import { ArPlacement, isArSupported } from '../xr/ar';
 import { createHud, MIC_LABELS, type InputMode, type TuneValues } from './ui';
 
 const MAX_FRAME_DELTA = 0.1;
@@ -40,7 +41,11 @@ export function mountSwarm(container: HTMLElement, config: ExperienceConfig): ()
     radius,
     tuning,
   });
-  scene.add(swarm.points);
+  // Placement anchor: identity in the normal player, the placed world transform in AR.
+  const anchor = new THREE.Group();
+  anchor.add(swarm.points);
+  scene.add(anchor);
+  const ar = new ArPlacement(renderer, scene, anchor, container, s.heightAboveSurfaceMeters + radius);
 
   const controls = new SwarmControls();
   const mic = new MicInput();
@@ -52,6 +57,7 @@ export function mountSwarm(container: HTMLElement, config: ExperienceConfig): ()
   let lastFrame: VoiceFrame | null = null;
 
   const resize = () => {
+    if (renderer.xr.isPresenting) return;
     const w = container.clientWidth || window.innerWidth;
     const h = container.clientHeight || window.innerHeight;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, tuning.maxPixelRatio));
@@ -131,6 +137,15 @@ export function mountSwarm(container: HTMLElement, config: ExperienceConfig): ()
       voice.calibrate();
       updateHint();
     },
+    enterAr: () => {
+      if (!arSupported) {
+        hud.setAr(false, 'AR is not available on this device or browser. The fullscreen sculpture still works.');
+        return;
+      }
+      void ar.enter();
+    },
+    resetAr: () => ar.reset(),
+    exitAr: () => ar.exit(),
     stopSound: () => {
       wantLive = false;
       mic.stop();
@@ -239,7 +254,19 @@ export function mountSwarm(container: HTMLElement, config: ExperienceConfig): ()
   let frames = 0;
   let bursts = 0;
 
-  renderer.setAnimationLoop((time) => {
+  let arSupported = false;
+  void isArSupported().then((ok) => (arSupported = ok));
+  ar.onChange = (state, message) => {
+    document.documentElement.classList.toggle('ar-active', ar.active);
+    hud.setAr(ar.active, message);
+    if (state === 'off') resize();
+  };
+  const blockXrSelect = (e: Event) => {
+    if ((e.target as Element | null)?.closest('button, input, select, label, .tune-panel')) e.preventDefault();
+  };
+  container.addEventListener('beforexrselect', blockXrSelect);
+
+  renderer.setAnimationLoop((time, frame) => {
     timer.update(time);
     const realDt = timer.getDelta();
     const dt = Math.min(realDt, MAX_FRAME_DELTA);
@@ -267,6 +294,7 @@ export function mountSwarm(container: HTMLElement, config: ExperienceConfig): ()
 
     controls.step(dt, timing);
     swarm.update(elapsed, dt, controls);
+    ar.update(frame);
     renderer.render(scene, camera);
 
     fpsFrames++;
@@ -317,6 +345,9 @@ export function mountSwarm(container: HTMLElement, config: ExperienceConfig): ()
   }
 
   return () => {
+    container.removeEventListener('beforexrselect', blockXrSelect);
+    ar.dispose();
+    document.documentElement.classList.remove('ar-active');
     renderer.setAnimationLoop(null);
     mic.dispose();
     document.removeEventListener('visibilitychange', resumeAudio);
@@ -324,7 +355,8 @@ export function mountSwarm(container: HTMLElement, config: ExperienceConfig): ()
     window.removeEventListener('resize', resize);
     timer.dispose();
     hud.dispose();
-    scene.remove(swarm.points);
+    anchor.remove(swarm.points);
+    scene.remove(anchor);
     swarm.dispose();
     renderer.dispose();
     renderer.domElement.remove();

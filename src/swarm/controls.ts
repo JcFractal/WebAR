@@ -20,8 +20,12 @@ export class SwarmControls {
   /** Decaying impulse, 0..1. Repeated triggers never exceed 1. */
   burst = 0;
 
+  /** Extra motion from loud, varying sound, 0..1. */
+  turbulence = 0;
+
   gatherTarget = 0;
   energyTarget = 0;
+  turbulenceTarget = 0;
   /** Set by the voice mapping when silence is releasing the formation. */
   settling = false;
 
@@ -40,6 +44,8 @@ export class SwarmControls {
     this.burst *= Math.exp((-3 * dt) / Math.max(0.05, timing.burstRecoverySeconds));
     if (this.burst < 1e-4) this.burst = 0;
 
-    this.energy += (clamp01(this.energyTarget) - this.energy) * (1 - Math.exp(-dt * 12));
+    const k = 1 - Math.exp(-dt * 12);
+    this.energy += (clamp01(this.energyTarget) - this.energy) * k;
+    this.turbulence += (clamp01(this.turbulenceTarget) - this.turbulence) * k;
   }
 }

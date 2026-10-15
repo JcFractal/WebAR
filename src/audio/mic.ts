@@ -5,7 +5,10 @@
  */
 export type MicStatus = 'off' | 'requesting' | 'live' | 'denied' | 'no-device' | 'unsupported' | 'error';
 
-const FFT_SIZE = 1024;
+import type { VoiceInput } from './analysis';
+
+/** 2048 at 48 kHz: ~23 Hz bins (resolves hum harmonics), ~43 ms window. */
+const FFT_SIZE = 2048;
 
 export class MicInput {
   status: MicStatus = 'off';
@@ -17,6 +20,8 @@ export class MicInput {
   private source: MediaStreamAudioSourceNode | null = null;
   private analyser: AnalyserNode | null = null;
   private buffer = new Float32Array(FFT_SIZE);
+  private spectrum = new Float32Array(FFT_SIZE / 2);
+  private reading: VoiceInput = { rms: 0, spectrum: null, sampleRate: 48000, fftSize: FFT_SIZE };
   private pending: Promise<void> | null = null;
   private disposed = false;
 
@@ -62,13 +67,22 @@ export class MicInput {
     return this.pending;
   }
 
-  /** RMS of the latest analyser window, 0..1. */
-  readRms(): number {
-    if (!this.analyser) return 0;
+  /** RMS (0..1) and spectrum of the latest analyser window. The returned object and arrays are reused. */
+  read(): VoiceInput {
+    const r = this.reading;
+    if (!this.analyser || !this.ctx) {
+      r.rms = 0;
+      r.spectrum = null;
+      return r;
+    }
     this.analyser.getFloatTimeDomainData(this.buffer);
     let sum = 0;
     for (let i = 0; i < this.buffer.length; i++) sum += this.buffer[i] * this.buffer[i];
-    return Math.sqrt(sum / this.buffer.length);
+    r.rms = Math.sqrt(sum / this.buffer.length);
+    this.analyser.getFloatFrequencyData(this.spectrum);
+    r.spectrum = this.spectrum;
+    r.sampleRate = this.ctx.sampleRate;
+    return r;
   }
 
   /** Browsers may suspend audio in the background; resuming needs a visible page or a tap. */

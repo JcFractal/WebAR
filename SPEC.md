@@ -45,11 +45,15 @@ Use the same renderer and swarm module. Distinction must include trajectory and 
 
 | Input | Desired response |
 |---|---|
-| Ordinary speech | Syllables stir the swarm and produce small expansions |
-| Sustained relatively steady sound | Gathering gradually increases until the configured formation is clear |
-| Louder sustained sound | Formation expands and becomes brighter, with bounded intensity |
-| Sharp onset such as a clap | A brief burst interrupts the formation, then recovers |
-| Quiet after activity | Motion calms and the configured formation gently settles |
+| Soft speech | Small ripples and slight organization |
+| Louder, varying speech | More motion and turbulence; does not complete the formation |
+| Sustained tonal hum or held vowel | Formation coherence builds gradually; a softer hum holds an intermediate shape, a fuller hum completes it |
+| Changes within a hum | Level and steadiness changes visibly move and loosen the formed sculpture; it stays alive |
+| Steady broadband noise (fan, crowd hiss) | Little formation, because it is not tonal |
+| Sharp onset such as a clap | A distinct burst with cooldown, then recovery; a lone clap does not change coherence |
+| Silence | Brief breaths keep the shape; longer silence gradually relaxes it into a calm drifting cloud |
+
+Accepted direction after phone testing (Milestone 3 revisions): control is continuous and expressive, not an on/off switch. Sound energy (motion) is separate from formation coherence. Do not gather automatically during silence, and do not map "any sound" to a fixed formation level.
 
 The system does not recognize the word "Om," identify a speaker, or distinguish humming from every other steady sound. Humming, a held vowel, music, or steady background sound may produce similar responses. Tune this heuristic against the venue. Do not promise reliable chant detection.
 
@@ -57,29 +61,30 @@ The system does not recognize the word "Om," identify a speaker, or distinguish 
 
 Keep the controls understandable and expose tuning values:
 
-- `energy`: smoothed sound level above the calibrated noise floor.
-- `gather`: formation blend from 0 to 1.
+- `energy`: smoothed sound level above the calibrated noise floor; drives immediate motion (brightness, size, ripples).
+- `turbulence`: loudness × unsteadiness; drives churn without forming the shape.
+- `gather`: formation coherence from 0 to 1, from steadiness × tonality × loudness (plus a small soft-speech contribution).
 - `burst`: a short impulse that decays.
 - Bass, mid, and treble band energies for secondary movement, when time permits.
 
-Obtain RMS from time-domain analyser data. Use frequency-domain data for optional band energies. Estimate steadiness from recent envelope variation over time. Gate it on meaningful input above the noise floor so silence is handled separately. No pitch detector is required.
+Obtain RMS from time-domain analyser data. Use frequency-domain data for optional band energies. Estimate steadiness from recent envelope variation over time. Estimate a lightweight tonality from frequency-domain data (spectral flatness after removing the calibrated noise spectrum) so steady broadband noise is less likely to complete the formation. Gate both on meaningful input above the noise floor so silence is handled separately. No pitch detector or speech recognition is required.
 
 Suggested starting behavior, subject to phone testing:
 
 - Measure ambient sound for about two seconds on a user-initiated calibration action. Show progress and ask the user to stay quiet during calibration.
-- After approximately two seconds of steady input above the noise floor, gather over roughly two to four seconds.
-- Variable speech primarily stirs; sharp rises can trigger a burst, with a cooldown so one clap does not trigger repeatedly.
-- Let bursts recover over roughly one to two seconds. Quiet settling should feel gradual rather than snap into a shape.
-- During sustained silence, retain a calm formation. A short pause between syllables must not instantly complete the bloom.
+- Motion responds within about 100–200 ms. A full steady hum reaches a recognizable formation in about 1–2 seconds; coherence changes are smooth, and intermediate levels can be held.
+- Variable speech stirs and adds turbulence; sharp rises can trigger a burst, with a cooldown so one clap does not trigger repeatedly.
+- Let bursts recover over roughly one to two seconds.
+- Silence keeps the shape through brief breaths (under about 0.7 s), then relaxes it gradually (about 3 s) into a drifting cloud.
 - Clamp movement and brightness. Use smoothing and separate enter/exit thresholds to avoid rapid flickering between behaviors.
 
-These timings are starting design values, not validated measurements. Expose sensitivity, calibration, gather timing, quiet-settle timing, and burst threshold/cooldown. If bass/treble mapping consumes time, retain the core energy, steadiness, and onset controls first.
+These timings are starting design values, not validated measurements. Expose sensitivity, calibration, tonal threshold, coherence build timing, quiet-relax timing, turbulence/ripple strength, and burst threshold/cooldown. If bass/treble mapping consumes time, retain the core energy, steadiness, and onset controls first.
 
 ### Manual controls and visible status
 
 Provide **Live** and **Manual** modes. In Manual mode, Drift, Gather, and Burst act on the same controls used by the audio mapping. In Live mode, the microphone drives them. Clearly show the selected input mode. Manual controls must never masquerade as voice input.
 
-Include a compact optional diagnostics panel with microphone status, energy, noise floor, gather amount, and frame rate. Include Calibrate, sensitivity adjustment, and mic retry. Keep implementation details out of the normal visitor view. Show only short instructions such as "Make a sound" and "Hold a steady tone."
+Include a compact optional diagnostics panel with microphone status, energy, noise floor, gather amount, and frame rate. Include Calibrate, sensitivity adjustment, and mic retry. Keep implementation details out of the normal visitor view. Show only short instructions such as "Speak to stir the particles" and "Hold a steady hum to form the shape."
 
 ## Web implementation
 
@@ -126,9 +131,9 @@ Example configuration to guide the implementation:
     "audio": {
       "gain": 1.4,
       "calibrationSeconds": 2,
-      "steadyHoldSeconds": 2,
-      "gatherSeconds": 3,
-      "quietSettleSeconds": 4,
+      "steadyHoldSeconds": 0.8,
+      "gatherSeconds": 1.2,
+      "quietSettleSeconds": 3,
       "burstCooldownSeconds": 1
     }
   },

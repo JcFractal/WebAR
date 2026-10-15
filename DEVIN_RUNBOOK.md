@@ -93,9 +93,9 @@ Implement milestone 3 only. Keep the manual controls and shared swarm from miles
 
 Add user-initiated microphone input and Web Audio analysis per SPEC.md. Request audio without video, resume AudioContext from a user action, and do not send microphone sound to speakers. No recording, uploads, speech recognition, pitch detector, backend, or AI service.
 
-Derive smoothed energy, a sustained-sound steadiness heuristic, and a sharp-onset burst trigger. Add ambient calibration, a practical sensitivity adjustment, hold timing, quiet settling, threshold hysteresis, and burst cooldown. Start simple; frequency-band embellishments are secondary. Both quiet settling and steady-sound gathering should reach the configured formation gradually. Short pauses in speech should not instantly form it.
+Derive smoothed energy, turbulence, a sustained-sound steadiness heuristic, a lightweight tonality measure, and a sharp-onset burst trigger. Use a continuous mapping: energy drives immediate motion, loud varying speech adds turbulence without completing the shape, a sustained tonal hum gradually builds coherence (intermediate levels can be held), and silence relaxes coherence after brief breaths. Never gather automatically during silence. Add ambient calibration, a practical sensitivity adjustment, threshold hysteresis, and burst cooldown.
 
-Provide explicit Live and Manual modes. In Live mode audio drives the existing swarm controls. Manual mode must be labeled and use the same control path. Add a compact optional diagnostic panel showing mic status, energy, noise floor, gather, and frame rate. Explain briefly that any sufficiently steady sound may gather the particles; do not claim to recognize Om.
+Provide explicit Live and Manual modes. In Live mode audio drives the existing swarm controls. Manual mode must be labeled and use the same control path. Add a compact optional diagnostic panel showing mic status, energy, noise floor, gather, and frame rate. Explain briefly that any steady tonal sound may form the shape; do not claim to recognize Om.
 
 Handle microphone refusal, missing input, retry, and repeated starts without duplicate streams. The sculpture must remain usable in Manual mode if permission is denied. Run the build and check UI/error paths. If you test with synthetic audio, label it as simulated and do not claim S24 microphone success. Deploy the update, report results, and stop after milestone 3.
 ```
@@ -103,9 +103,10 @@ Handle microphone refusal, missing input, retry, and repeated starts without dup
 ### Juan checks
 
 - [ ] Tap Enable Sound and grant permissions. Calibrate while quiet. The meter should respond to your phone's microphone.
-- [ ] Talk in short phrases. Check that syllables stir the swarm rather than cause constant full bursts.
-- [ ] Hold an "Ommm" or another vowel for several seconds. A formation should gradually gather. Repeat at different volumes and tune sensitivity.
-- [ ] Clap once, then remain quiet. Check one burst with controlled recovery, followed by a calm settle.
+- [ ] Speak softly, then loudly. Soft speech gives small ripples; loud speech gives more turbulence without forming the shape or constant bursts.
+- [ ] Hold an "Ommm" softly, then fully. The formation should build gradually, hold partway when soft, and complete when full. Waver the hum and watch the formed shape move.
+- [ ] Take a short breath mid-hum (the shape stays), then go silent (it relaxes into a drifting cloud).
+- [ ] Clap once. Check one distinct burst with controlled recovery.
 - [ ] Test refusal in a fresh permission context, then retry using site permissions if necessary. Manual mode should still work. Stop and restart sound twice.
 
 **Pass:** the actual S24 microphone controls the sculpture. A steady-room-noise false positive may need calibration; this is a sound heuristic, not speech understanding.
@@ -213,7 +214,7 @@ Aim for approximately 90 seconds, adapting to the time the organizers give you:
 1. Show QR 1 and open Neon Garden. Explain that a link launches it without an app installation.
 2. Place it if using the verified AR route. Otherwise use the rehearsed fullscreen route and name it accurately.
 3. Ask for a little talking or a clap. Let the sculpture react.
-4. Ask the room to hold a steady tone, then become quiet. Let the formation gather and settle. One nearby participant can supply the tone if crowd input is unclear.
+4. Ask the room to hold a steady hum. Let the formation build, then go quiet and let it relax into a drifting cloud. One nearby participant can supply the tone if crowd input is unclear.
 5. Open QR 2 or its direct link. Show Cosmic Vortex briefly and explain that it is another configuration of the same player.
 
 The microphone is on the demo phone. Each attendee who opens a QR gets an independent local experience; phones are not synchronized. The projected phone is the shared audience view. No multiplayer or shared room state is part of this MVP.

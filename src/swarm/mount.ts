@@ -79,7 +79,10 @@ export function mountSwarm(container: HTMLElement, config: ExperienceConfig): ()
     manualEnergy,
     maxPixelRatio: tuning.maxPixelRatio,
     gain: audio.gain,
-    voiceGather: audio.voiceGather,
+    speechCoherence: audio.speechCoherence,
+    tonalThreshold: audio.tonalThreshold,
+    turbulenceStrength: tuning.turbulenceStrength,
+    rippleStrength: tuning.rippleStrength,
     steadyHoldSeconds: audio.steadyHoldSeconds,
     quietSettleSeconds: audio.quietSettleSeconds,
     quietDelaySeconds: audio.quietDelaySeconds,
@@ -94,6 +97,7 @@ export function mountSwarm(container: HTMLElement, config: ExperienceConfig): ()
       controls.settling = false;
       controls.gatherTarget = manualGatherTarget;
       controls.energyTarget = manualEnergy;
+      controls.turbulenceTarget = manualEnergy * 0.5;
     }
     updateHint();
   };
@@ -156,23 +160,27 @@ export function mountSwarm(container: HTMLElement, config: ExperienceConfig): ()
           timing.burstRecoverySeconds = value as number;
           break;
         case 'gain':
-        case 'voiceGather':
+        case 'speechCoherence':
+        case 'tonalThreshold':
         case 'steadyHoldSeconds':
         case 'quietDelaySeconds':
         case 'burstThresholdDb':
         case 'burstCooldownSeconds':
-          audio[key as 'gain' | 'voiceGather' | 'steadyHoldSeconds' | 'quietDelaySeconds' | 'burstThresholdDb' | 'burstCooldownSeconds'] = value as number;
+          audio[key as 'gain' | 'speechCoherence' | 'tonalThreshold' | 'steadyHoldSeconds' | 'quietDelaySeconds' | 'burstThresholdDb' | 'burstCooldownSeconds'] = value as number;
           break;
         case 'manualEnergy':
           manualEnergy = value as number;
-          if (mode === 'manual') controls.energyTarget = manualEnergy;
+          if (mode === 'manual') {
+            controls.energyTarget = manualEnergy;
+            controls.turbulenceTarget = manualEnergy * 0.5;
+          }
           break;
         case 'maxPixelRatio':
           tuning.maxPixelRatio = value as number;
           resize();
           break;
         default:
-          tuning[key as 'pointSize' | 'brightness' | 'burstStrength'] = value as number;
+          tuning[key as 'pointSize' | 'brightness' | 'burstStrength' | 'turbulenceStrength' | 'rippleStrength'] = value as number;
       }
     },
   });
@@ -192,7 +200,7 @@ export function mountSwarm(container: HTMLElement, config: ExperienceConfig): ()
     } else if (mode === 'live' && mic.contextState === 'suspended') {
       text = 'Sound paused. Tap anywhere to resume.';
     } else if (mode === 'live') {
-      text = 'Speak or hum to draw the particles in. Hold a hum to complete the shape.';
+      text = 'Speak to stir the particles. Hold a steady hum to form the shape.';
     } else {
       text = '';
     }
@@ -240,17 +248,18 @@ export function mountSwarm(container: HTMLElement, config: ExperienceConfig): ()
 
     if (mic.status === 'live') {
       // Analyse in both modes so diagnostics stay useful; only Live mode writes the controls.
-      const f = voice.step(mic.readRms(), dt, audio);
+      const f = voice.step(mic.read(), dt, audio);
       lastFrame = f;
       if (mode === 'live') {
         controls.energyTarget = f.energy;
+        controls.turbulenceTarget = f.turbulence;
         controls.gatherTarget = f.gatherTarget;
         controls.settling = f.settling;
         if (f.burst > 0) {
           controls.triggerBurst(f.burst);
           bursts++;
         }
-        hud.setMeter(f.energy, f.state === 'steady');
+        hud.setMeter(f.energy, f.state === 'tonal');
       }
     } else {
       lastFrame = null;
@@ -279,6 +288,8 @@ export function mountSwarm(container: HTMLElement, config: ExperienceConfig): ()
           floorDb: voice.noiseFloorDb,
           calibrated: voice.calibrated,
           steadiness: lastFrame?.steadiness ?? 0,
+          tonality: lastFrame?.tonality ?? 0,
+          turbulence: controls.turbulence,
           gather: controls.gather,
           state: lastFrame?.state ?? (mode === 'manual' ? 'manual' : '–'),
           fps,

@@ -166,3 +166,9 @@ h1 { font-size: clamp(1.6rem, 6vw, 2.4rem); margin: 0.2rem 0 1.2rem; }
 .diag-buttons { justify-content: flex-start; }
 .diag-buttons button { pointer-events: auto; font: inherit; color: var(--fg); cursor: pointer; }
 .diag-note { margin: 0; color: var(--muted); font-size: 0.8rem; line-height: 1.4; }
+
+/* Immersive AR: the camera feed shows through; the DOM overlay keeps only the HUD. */
+html.ar-active, html.ar-active body, html.ar-active #app, html.ar-active .player { background: transparent !important; }
+html.ar-active .stage, html.ar-active .fps { visibility: hidden; }
+.ar-status[hidden] { display: none; }
+.ar-status { pointer-events: none; font-weight: 600; }

@@ -50,6 +50,9 @@ export interface HudHandlers {
   retry(): void;
   calibrate(): void;
   stopSound(): void;
+  enterAr(): void;
+  resetAr(): void;
+  exitAr(): void;
   tune<K extends keyof TuneValues>(key: K, value: TuneValues[K]): void;
 }
 
@@ -58,6 +61,8 @@ export interface Hud {
   setMode(mode: InputMode): void;
   setMic(status: MicStatus): void;
   setHint(text: string, showRetry: boolean): void;
+  /** AR session active flag and status/error message ('' clears it). */
+  setAr(active: boolean, message: string): void;
   setMeter(energy: number, steady: boolean): void;
   setDiagnostics(d: DiagValues): void;
   readonly diagnosticsOpen: boolean;
@@ -121,7 +126,18 @@ export function createHud(container: HTMLElement, initial: TuneValues, h: HudHan
   const fullscreen = button('Fullscreen', 'hud-chip');
   const tuneToggle = button('Tune', 'hud-chip');
   const diagToggle = button('Diagnostics', 'hud-chip');
-  secondary.append(liveChip, manualChip, fullscreen, tuneToggle, diagToggle);
+  const enterAr = button('Enter AR', 'hud-chip');
+  const resetAr = button('Reset placement', 'hud-chip');
+  const exitAr = button('Exit AR', 'hud-chip');
+  resetAr.hidden = true;
+  exitAr.hidden = true;
+  enterAr.addEventListener('click', () => h.enterAr());
+  resetAr.addEventListener('click', () => h.resetAr());
+  exitAr.addEventListener('click', () => h.exitAr());
+  const arStatus = el('p', 'hud-hint ar-status');
+  arStatus.setAttribute('aria-live', 'polite');
+  arStatus.hidden = true;
+  secondary.append(enterAr, resetAr, exitAr, liveChip, manualChip, fullscreen, tuneToggle, diagToggle);
   if (!document.fullscreenEnabled) fullscreen.hidden = true;
 
   const panel = el('div', 'tune-panel');
@@ -213,7 +229,7 @@ export function createHud(container: HTMLElement, initial: TuneValues, h: HudHan
     ),
   );
 
-  hud.append(hintRow, main, secondary);
+  hud.append(arStatus, hintRow, main, secondary);
   container.append(panel, diag, hud);
 
   const setGatherTarget = (target: number) => {
@@ -292,6 +308,14 @@ export function createHud(container: HTMLElement, initial: TuneValues, h: HudHan
     setMic(status) {
       micStatus = status;
       syncChips();
+    },
+    setAr(active, message) {
+      enterAr.hidden = active;
+      resetAr.hidden = !active;
+      exitAr.hidden = !active;
+      fullscreen.hidden = active || !document.fullscreenEnabled;
+      arStatus.textContent = message;
+      arStatus.hidden = message === '';
     },
     setHint(text, showRetry) {
       hint.textContent = text;

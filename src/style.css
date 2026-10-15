@@ -135,3 +135,34 @@ h1 { font-size: clamp(1.6rem, 6vw, 2.4rem); margin: 0.2rem 0 1.2rem; }
 .tune-row output { color: var(--accent); font-variant-numeric: tabular-nums; }
 .tune-row input[type='range'], .tune-row select { width: 100%; }
 .tune-row select { font: inherit; padding: 0.3rem; background: #0d1018; color: var(--fg); border: 1px solid #2a3142; border-radius: 0.4rem; }
+
+.hud-group { display: contents; }
+.hud-group[hidden], .hud-hint-row[hidden], .tune-panel[hidden] { display: none; }
+.hud-hint-row { max-width: 36rem; }
+.hud-hint { margin: 0; text-align: center; font-size: 0.9rem; color: var(--fg); text-shadow: 0 1px 4px #000; }
+.hud-chip:disabled { opacity: 0.5; cursor: default; }
+.mode-badge.live { background: #7cfc9a; color: #04140a; }
+.meter {
+  width: min(16rem, 55vw);
+  height: 0.9rem;
+  border-radius: 999px;
+  border: 1px solid #39425a;
+  background: #0d1018d9;
+  overflow: hidden;
+}
+.meter-fill {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, #4dd8ff, #ff6ad5);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+.meter-fill.steady { background: linear-gradient(90deg, #7cfc9a, #4dd8ff); }
+.panel-heading { margin: 0.4rem 0 0; color: var(--muted); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.diag-panel { left: 0.75rem; right: auto; }
+.diag-stats { display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 0.75rem; margin: 0; }
+.diag-stats dt { color: var(--muted); }
+.diag-stats dd { margin: 0; font-variant-numeric: tabular-nums; }
+.diag-buttons { justify-content: flex-start; }
+.diag-buttons button { pointer-events: auto; font: inherit; color: var(--fg); cursor: pointer; }
+.diag-note { margin: 0; color: var(--muted); font-size: 0.8rem; line-height: 1.4; }

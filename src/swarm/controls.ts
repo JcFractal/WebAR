@@ -4,6 +4,8 @@
  */
 export interface ControlTiming {
   gatherSeconds: number;
+  /** Rise time used instead of `gatherSeconds` while `settling` (quiet → formation). */
+  quietSettleSeconds: number;
   releaseSeconds: number;
   burstRecoverySeconds: number;
 }
@@ -20,6 +22,8 @@ export class SwarmControls {
 
   gatherTarget = 0;
   energyTarget = 0;
+  /** Set by the voice mapping when silence (not steady sound) is forming the shape. */
+  settling = false;
 
   triggerBurst(strength = 1): void {
     this.burst = Math.max(this.burst, clamp01(strength));
@@ -27,7 +31,7 @@ export class SwarmControls {
 
   step(dt: number, timing: ControlTiming): void {
     const rising = this.gatherTarget > this.gather;
-    const seconds = Math.max(0.05, rising ? timing.gatherSeconds : timing.releaseSeconds);
+    const seconds = Math.max(0.05, rising ? (this.settling ? timing.quietSettleSeconds : timing.gatherSeconds) : timing.releaseSeconds);
     const delta = dt / seconds;
     this.gather = rising ? Math.min(this.gatherTarget, this.gather + delta) : Math.max(this.gatherTarget, this.gather - delta);
     this.gather = clamp01(this.gather);

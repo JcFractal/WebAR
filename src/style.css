@@ -65,3 +65,73 @@ h1 { font-size: clamp(1.6rem, 6vw, 2.4rem); margin: 0.2rem 0 1.2rem; }
 .player-title { margin: 0; font-size: clamp(1.3rem, 5vw, 2rem); }
 .back-link { color: var(--accent); text-decoration: none; }
 .brand { width: 100%; margin: 0; color: var(--muted); font-size: 0.85rem; }
+
+.hud {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 1rem 1rem max(1rem, env(safe-area-inset-bottom));
+  display: grid;
+  gap: 0.6rem;
+  justify-items: center;
+  pointer-events: none;
+  background: linear-gradient(transparent, #03040acc);
+}
+.hud-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; justify-content: center; }
+.hud button { pointer-events: auto; font: inherit; color: var(--fg); cursor: pointer; }
+.hud-button {
+  min-width: 5.2rem;
+  min-height: 3rem;
+  padding: 0.6rem 1rem;
+  border-radius: 999px;
+  border: 1px solid #39425a;
+  background: #0d1018d9;
+  font-size: 1rem;
+}
+.hud-button.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.hud-button.flash { animation: flash 0.5s ease-out; }
+@keyframes flash { from { background: #4dd8ff66; } to { background: #0d1018d9; } }
+.hud-chip {
+  min-height: 2.2rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid #2a3142;
+  background: #0d1018b3;
+  font-size: 0.85rem;
+}
+.hud-chip.active { border-color: var(--accent); color: var(--accent); }
+.mode-badge {
+  padding: 0.25rem 0.6rem;
+  border-radius: 0.4rem;
+  background: #ffb347;
+  color: #1a1206;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.fps { font-variant-numeric: tabular-nums; font-size: 0.85rem; color: var(--muted); min-width: 4.5rem; }
+
+.tune-panel {
+  position: absolute;
+  z-index: 3;
+  right: 0.75rem;
+  top: max(4.5rem, calc(env(safe-area-inset-top) + 4rem));
+  width: min(20rem, calc(100% - 1.5rem));
+  max-height: calc(100% - 13rem);
+  overflow-y: auto;
+  padding: 0.75rem 1rem;
+  border: 1px solid #2a3142;
+  border-radius: 0.75rem;
+  background: #0b0e16ee;
+  display: grid;
+  gap: 0.55rem;
+  font-size: 0.85rem;
+}
+.tune-panel[hidden], .fps[hidden], .hud-chip[hidden] { display: none; }
+.tune-row { display: grid; gap: 0.2rem; }
+.tune-row output { color: var(--accent); font-variant-numeric: tabular-nums; }
+.tune-row input[type='range'], .tune-row select { width: 100%; }
+.tune-row select { font: inherit; padding: 0.3rem; background: #0d1018; color: var(--fg); border: 1px solid #2a3142; border-radius: 0.4rem; }

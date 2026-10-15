@@ -82,6 +82,10 @@ async function showExperience(id: string): Promise<void> {
 
     const dispose = mount(root, config);
     window.addEventListener('pagehide', dispose, { once: true });
+    // Restored from the back/forward cache after dispose: start fresh rather than show a dead canvas.
+    window.addEventListener('pageshow', (e) => {
+      if (e.persisted) window.location.reload();
+    });
   } catch (err) {
     if (err instanceof ExperienceLoadError) {
       console.warn(`[player] ${err.kind}: ${err.message}`);

@@ -16,6 +16,7 @@ export interface TuneValues {
   manualEnergy: number;
   maxPixelRatio: number;
   gain: number;
+  voiceGather: number;
   steadyHoldSeconds: number;
   quietSettleSeconds: number;
   quietDelaySeconds: number;
@@ -170,10 +171,11 @@ export function createHud(container: HTMLElement, initial: TuneValues, h: HudHan
   addSlider(panel, 'releaseSeconds', 'Release time (s)', 0.5, 8, 0.25);
   addSlider(panel, 'maxPixelRatio', 'Render scale cap', 0.75, 3, 0.25);
   panel.append(el('p', 'panel-heading', 'Sound response'));
-  addSlider(panel, 'steadyHoldSeconds', 'Steady hold (s)', 0.5, 6, 0.25);
-  addSlider(panel, 'gatherSeconds', 'Gather time (s)', 0.5, 8, 0.25);
-  addSlider(panel, 'quietDelaySeconds', 'Quiet delay (s)', 0, 4, 0.1, 1);
-  addSlider(panel, 'quietSettleSeconds', 'Quiet settle (s)', 0.5, 10, 0.25);
+  addSlider(panel, 'voiceGather', 'Voice pull', 0, 1, 0.05);
+  addSlider(panel, 'steadyHoldSeconds', 'Hum hold (s)', 0.1, 4, 0.1, 1);
+  addSlider(panel, 'gatherSeconds', 'Gather time (s)', 0.2, 6, 0.1, 1);
+  addSlider(panel, 'quietDelaySeconds', 'Quiet delay (s)', 0, 3, 0.1, 1);
+  addSlider(panel, 'quietSettleSeconds', 'Quiet release (s)', 0.5, 10, 0.25);
   addSlider(panel, 'burstThresholdDb', 'Burst threshold (dB)', 5, 35, 1, 0);
   addSlider(panel, 'burstCooldownSeconds', 'Burst cooldown (s)', 0.2, 4, 0.1, 1);
   panel.append(el('p', 'panel-heading', 'Manual test'));
@@ -198,7 +200,7 @@ export function createHud(container: HTMLElement, initial: TuneValues, h: HudHan
     el(
       'p',
       'diag-note',
-      'Any steady sound (humming, a held vowel, music, or loud room noise) can gather the particles. ' +
+      'Voice draws the particles in; a steady sound (humming, a held vowel, music, or loud room noise) completes the shape; silence releases it. ' +
         'It responds to sound level and steadiness only; it does not recognize words.',
     ),
   );

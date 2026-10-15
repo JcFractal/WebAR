@@ -10,21 +10,21 @@ A small WebAR player that loads experiences from static JSON configs (`/?exp=<id
 
 - `src/audio/mic.ts` — `MicInput`: one stream at a time (repeat taps reuse the pending request), refusal / missing device / busy / unsupported states with Retry, cleanup on Stop sound and page exit.
 - `src/audio/analysis.ts` — `VoiceAnalyzer` (pure, deterministic): RMS → dB above the calibrated noise floor → `energy`; envelope variation → `steadiness`; onset above the recent peak → `burst`.
-  - Steady sound (above `enterThreshold`, steadiness ≥ `steadyThreshold`) for `steadyHoldSeconds` gathers the formation over `gatherSeconds`.
-  - Varying sound (speech) loosens the shape and stirs it through `energy`.
-  - Silence for `quietDelaySeconds` settles into the formation over `quietSettleSeconds`; shorter pauses keep the previous target.
+  - Any sound above `enterThreshold` (hysteresis down to `exitThreshold`) immediately pulls toward the formation at strength `voiceGather`; energy also brightens and enlarges the points.
+  - Steady sound (steadiness ≥ `steadyThreshold`) raises that pull to the full formation over `steadyHoldSeconds`. The blend moves at most 1 / `gatherSeconds` per second.
+  - Silence for `quietDelaySeconds` releases the formation into the drifting cloud over `quietSettleSeconds`; shorter pauses keep the previous target.
   - A jump of `burstThresholdDb` over the recent peak, with energy ≥ `burstMinEnergy`, triggers one burst, then waits `burstCooldownSeconds`.
 - Calibration runs automatically on the first Enable sound (stay quiet ~2 s) and again from Diagnostics → Calibrate. The noise floor is the 90th percentile of the measured level.
 
 **Live / Manual:** the badge shows the active input. In Live mode the microphone writes `SwarmControls`; in Manual mode Drift / Gather / Burst write the same controls. If the microphone is refused or lost, the player falls back to Manual. **Diagnostics** shows mic status, energy, level, noise floor, steadiness, gather, state, and frame rate, plus Sensitivity, Calibrate, Retry mic, and Stop sound.
 
-This is a sound-level heuristic, not speech recognition: any steady sound (humming, a held vowel, music, loud room noise) can gather the particles.
+This is a sound-level heuristic, not speech recognition: any sound draws the particles in, and any steady sound (humming, a held vowel, music, loud room noise) can complete the formation.
 
 ## Swarm (milestone 2)
 
 One shared engine in `src/swarm/` renders every experience as a single `THREE.Points` cloud (typed arrays, O(n) update, soft additive point sprites).
 
-- `controls.ts` — normalized `energy`, `gather`, `burst` (0–1). The Manual buttons drive these now; the microphone will drive the same values in milestone 3.
+- `controls.ts` — normalized `energy`, `gather`, `burst` (0–1). Written by the Manual buttons or, in Live mode, by the microphone.
 - `formations.ts` — procedural `flower` and `rings` targets.
 - `motion.ts` — `garden` and `vortex` drift presets.
 - `swarm.ts` — blends drift → formation by `gather`, adds a bounded, decaying `burst` impulse.
@@ -62,7 +62,7 @@ Validated fields: `id`, `template` (`swarm`), `title`, `settings.particleCount` 
 
 Optional `settings.swarm` tuning (defaults in `src/config.ts`): `pointSize` (0.002–0.05 m), `brightness` (0.1–3), `burstStrength` (0–1.5), `burstRecoverySeconds` (0.2–10), `releaseSeconds` (0.2–20), `maxPixelRatio` (0.5–3). `brand` is accepted for later milestones.
 
-Optional `settings.audio` (defaults in `AUDIO_DEFAULTS`, `src/config.ts`; starting points to tune on site): `gain` 1.4 (sensitivity, 0.1–10), `calibrationSeconds` 2, `steadyHoldSeconds` 2, `gatherSeconds` 3, `quietSettleSeconds` 4, `quietDelaySeconds` 1.2, `burstCooldownSeconds` 1, `burstThresholdDb` 15, `burstMinEnergy` 0.45, `dynamicRangeDb` 48, `enterThreshold` 0.2, `exitThreshold` 0.1 (must be below enter), `steadyThreshold` 0.6. Unknown keys and out-of-range values are rejected.
+Optional `settings.audio` (defaults in `AUDIO_DEFAULTS`, `src/config.ts`; starting points to tune on site): `gain` 1.4 (sensitivity, 0.1–10), `calibrationSeconds` 2, `voiceGather` 0.5 (0–1), `steadyHoldSeconds` 0.8, `gatherSeconds` 1.2, `quietSettleSeconds` 2.5, `quietDelaySeconds` 0.5, `burstCooldownSeconds` 1, `burstThresholdDb` 15, `burstMinEnergy` 0.45, `dynamicRangeDb` 48, `enterThreshold` 0.2, `exitThreshold` 0.1 (must be below enter), `steadyThreshold` 0.6. Unknown keys and out-of-range values are rejected.
 
 ## Vercel
 

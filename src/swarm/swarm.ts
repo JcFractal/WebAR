@@ -167,7 +167,7 @@ export class Swarm {
     const f = this.formation;
     const ct = Math.cos(f.tilt);
     const st = Math.sin(f.tilt);
-    const scale = this.opts.radius * (1 + 0.25 * energy);
+    const scale = this.opts.radius * (1 + 0.06 * energy);
     const tmp = this.tmp;
     const pos = this.positions;
 

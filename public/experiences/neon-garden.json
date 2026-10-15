@@ -1,0 +1,22 @@
+{
+  "id": "neon-garden",
+  "template": "swarm",
+  "title": "Neon Garden",
+  "settings": {
+    "particleCount": 3000,
+    "palette": ["#7CFC9A", "#4DD8FF", "#FF6AD5"],
+    "motionPreset": "garden",
+    "formation": "flower",
+    "diameterMeters": 0.8,
+    "heightAboveSurfaceMeters": 0.6,
+    "audio": {
+      "gain": 1.4,
+      "calibrationSeconds": 2,
+      "steadyHoldSeconds": 2,
+      "gatherSeconds": 3,
+      "quietSettleSeconds": 4,
+      "burstCooldownSeconds": 1
+    }
+  },
+  "brand": { "name": "JC Fractal", "accent": "#4DD8FF" }
+}

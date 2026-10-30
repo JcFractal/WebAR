@@ -3,6 +3,7 @@ import { KEYING_DEFAULTS, type ExperienceConfig } from '../config';
 import { VideoClip } from '../video/clip';
 import { createVideoMaterial } from '../video/material';
 import { planeSize } from '../video/media';
+import { createVideoHud, type VideoHud } from '../video/ui';
 import { ArPlacement } from './ar';
 import { applyStageFlag, createXrRenderer, describeFlags, layerReport, overlayRootFor, readXrTestFlags, sessionReport } from './options';
 
@@ -14,9 +15,17 @@ import { applyStageFlag, createXrRenderer, describeFlags, layerReport, overlayRo
  * - `video-element`   + a playing `<video>` (synthetic clip, same element code as the video page); plane still magenta.
  * - `video-texture`   + the plane shows the video through a plain MeshBasicMaterial (VideoTexture).
  * - `video-shader`    + the plane uses the video page's keying ShaderMaterial in Opaque mode.
+ * Then, one video-page difference at a time on top of `video-shader` (cumulative):
+ * - `placeholder`     material created with an empty placeholder texture, then the clip texture swapped in (as setClip).
+ * - `visibility`      plane hidden until the first frame, visibility recomputed every frame (video page rule).
+ * - `floor`           + the GridHelper floor, hidden while AR is active.
+ * - `layout`          + the video page's layout(): pixel ratio, size, preview-camera framing on clip change,
+ *                     resize and AR exit; searching pauses and rewinds.
+ * - `hud`             + the full video HUD (transport, Choose MP4, Adjust appearance, Fullscreen) and its
+ *                     beforexrselect rule, replacing the probe's buttons.
  * Also accepts the `layer` / `overlay` / `stage` flags from options.ts.
  */
-export const PROBE_STEPS = ['cube', 'plane', 'video-element', 'video-texture', 'video-shader'] as const;
+export const PROBE_STEPS = ['cube', 'plane', 'video-element', 'video-texture', 'video-shader', 'placeholder', 'visibility', 'floor', 'layout', 'hud'] as const;
 export type ProbeStep = (typeof PROBE_STEPS)[number];
 
 const VIDEO_HEIGHT = 1.2;
@@ -28,6 +37,7 @@ export function mountXrProbe(container: HTMLElement, config: ExperienceConfig): 
   const step: ProbeStep = (PROBE_STEPS as readonly string[]).includes(requested) ? (requested as ProbeStep) : 'cube';
   const stepIndex = PROBE_STEPS.indexOf(step);
   const usesVideo = stepIndex >= PROBE_STEPS.indexOf('video-element');
+  const has = (s: ProbeStep) => stepIndex >= PROBE_STEPS.indexOf(s);
 
   const renderer = createXrRenderer({ antialias: false, powerPreference: 'high-performance' }, flags);
   renderer.setClearColor(0x03040a, 1);
@@ -39,6 +49,8 @@ export function mountXrProbe(container: HTMLElement, config: ExperienceConfig): 
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 50);
+  const floor = has('floor') ? new THREE.GridHelper(2, 8, 0x4dd8ff, 0x2a3142) : null;
+  if (floor) scene.add(floor);
   const anchor = new THREE.Group();
   scene.add(anchor);
 
@@ -46,6 +58,7 @@ export function mountXrProbe(container: HTMLElement, config: ExperienceConfig): 
   const clip = usesVideo ? new VideoClip(container, source, true) : null;
   let lastVideoTime = -1;
 
+  const placeholder = new THREE.Texture();
   let mesh: THREE.Mesh<THREE.BufferGeometry, THREE.Material>;
   if (step === 'cube') {
     mesh = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.25, 0.25), new THREE.MeshNormalMaterial());
@@ -56,25 +69,51 @@ export function mountXrProbe(container: HTMLElement, config: ExperienceConfig): 
     const material =
       step === 'video-texture'
         ? new THREE.MeshBasicMaterial({ map: clip!.texture, side: THREE.DoubleSide, toneMapped: false })
-        : step === 'video-shader'
-          ? createVideoMaterial(clip!.texture, { ...KEYING_DEFAULTS, mode: 'opaque' })
+        : has('video-shader')
+          ? createVideoMaterial(has('placeholder') ? placeholder : clip!.texture, { ...KEYING_DEFAULTS, mode: 'opaque' })
           : new THREE.MeshBasicMaterial({ color: 0xff00ff, side: THREE.DoubleSide });
     mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);
     camera.position.set(0, VIDEO_HEIGHT / 2, 2.4);
     camera.lookAt(0, VIDEO_HEIGHT / 2, 0);
   }
   anchor.add(mesh);
-  const layoutPlane = () => {
-    if (step === 'cube') return;
-    const size = planeSize(VIDEO_HEIGHT, clip?.aspect ?? 9 / 16);
-    mesh.scale.set(size.width, size.height, 1);
-    mesh.position.set(0, size.height / 2, 0);
+  if (has('placeholder')) (mesh.material as THREE.ShaderMaterial).uniforms.map.value = clip!.texture;
+  if (has('visibility')) mesh.visible = false;
+  // Without `layout`: plane only. With `layout`: the video page's layout() (copied as is).
+  const layout = () => {
+    if (step !== 'cube') {
+      const size = planeSize(VIDEO_HEIGHT, clip?.aspect ?? 9 / 16);
+      mesh.scale.set(size.width, size.height, 1);
+      mesh.position.set(0, size.height / 2, 0);
+    }
+    if (renderer.xr.isPresenting) return;
+    const w = container.clientWidth || window.innerWidth;
+    const h = container.clientHeight || window.innerHeight;
+    if (has('layout')) renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    if (has('layout')) {
+      const tanV = Math.tan(THREE.MathUtils.degToRad(50 / 2));
+      const span = VIDEO_HEIGHT;
+      const dist = Math.max((span * 1.15) / 2 / tanV, (Math.max(mesh.scale.x, 0.5) * 1.15) / 2 / (tanV * camera.aspect));
+      camera.position.set(0, span / 2, dist);
+      camera.lookAt(0, span / 2, 0);
+    }
+    camera.updateProjectionMatrix();
   };
-  layoutPlane();
-  if (clip) clip.onChange = layoutPlane;
+  let soundOn = true;
+  const refreshHud = () => {
+    hud?.setTransport(clip?.state ?? 'loading', soundOn);
+    hud?.setStatus(clip?.state === 'error' ? clip.message : clip?.state === 'blocked' ? clip.message : '', clip?.state === 'error');
+  };
+  if (clip)
+    clip.onChange = () => {
+      layout();
+      refreshHud();
+    };
 
-  const hud = document.createElement('div');
-  hud.className = 'hud';
+  const probeDiv = document.createElement('div');
+  probeDiv.className = 'hud';
   const status = document.createElement('p');
   status.className = 'hud-hint';
   status.textContent = `AR probe step "${step}". ${requested !== step ? `Unknown step "${requested}"; using cube. ` : ''}Steps: ${PROBE_STEPS.join(' → ')}.`;
@@ -91,42 +130,75 @@ export function mountXrProbe(container: HTMLElement, config: ExperienceConfig): 
   };
   const readout = document.createElement('pre');
   readout.className = 'diag-readout';
-  hud.append(status, row);
-  overlayRoot.append(readout, hud);
+  probeDiv.append(status, row);
+  overlayRoot.append(readout);
+  if (!has('hud')) overlayRoot.append(probeDiv);
 
   const ar = new ArPlacement(renderer, scene, anchor, overlayRoot, 0, { noun: step === 'cube' ? 'cube' : 'plane', fallback: 'probe preview' });
   const enter = mk('Enter AR', () => void ar.enter());
   const reset = mk('Reset placement', () => ar.reset());
   const exit = mk('Exit AR', () => ar.exit());
   const play = clip ? mk('Play', () => void clip.restart(true)) : null;
+  const hud: VideoHud | null = has('hud')
+    ? createVideoHud(overlayRoot, { displayHeightMeters: VIDEO_HEIGHT, bottomOffsetMeters: 0, loop: true, ...KEYING_DEFAULTS, mode: 'opaque', background: 'dark' }, true, false, {
+        playPause: () => {
+          if (!clip) return;
+          if (clip.playing) clip.pause();
+          else if (ar.active && ar.state !== 'placed') return;
+          else void clip.play(soundOn);
+        },
+        replay: () => {
+          if (!clip || (ar.active && ar.state !== 'placed')) return;
+          void clip.restart(soundOn);
+        },
+        toggleSound: () => {
+          soundOn = !soundOn;
+          clip?.setMuted(!soundOn);
+          refreshHud();
+        },
+        retry: () => clip?.retry(),
+        enterAr: () => void ar.enter(),
+        resetAr: () => ar.reset(),
+        exitAr: () => ar.exit(),
+        chooseFile: () => hud?.setStatus('Probe uses the synthetic clip only; local files are not loaded here.', false),
+        useFixture: () => undefined,
+        sampleKey: () => undefined,
+        tune: () => undefined,
+        cyclePlaneMaterial: () => undefined,
+      })
+    : null;
   const sync = () => {
     enter.hidden = ar.active;
     reset.hidden = exit.hidden = !ar.active;
     if (play) play.hidden = ar.active;
   };
+  let lastAr = 'off';
   ar.onChange = (state, message) => {
     document.documentElement.classList.toggle('ar-active', ar.active);
+    if (floor) floor.visible = !ar.active;
     if (message) status.textContent = message;
-    if (state === 'placed') void clip?.restart(true);
-    if (state === 'off') clip?.pause();
+    hud?.setAr(ar.active, message);
+    if (has('layout') && state === 'searching' && lastAr !== 'ready') clip?.stop();
+    if (state === 'placed') void clip?.restart(soundOn);
+    if (state === 'off') {
+      clip?.pause();
+      if (has('layout')) layout();
+    }
+    lastAr = state;
     sync();
+    refreshHud();
   };
   sync();
   const blockXrSelect = (e: Event) => {
-    if ((e.target as Element | null)?.closest('button')) e.preventDefault();
+    const sel = has('hud') ? 'button, input, select, label, .tune-panel' : 'button';
+    if ((e.target as Element | null)?.closest(sel)) e.preventDefault();
   };
-  overlayRoot.addEventListener('beforexrselect', blockXrSelect);
+  const selectRoot = has('hud') ? container : overlayRoot;
+  selectRoot.addEventListener('beforexrselect', blockXrSelect);
 
-  const layout = () => {
-    if (renderer.xr.isPresenting) return;
-    const w = container.clientWidth || window.innerWidth;
-    const h = container.clientHeight || window.innerHeight;
-    renderer.setSize(w, h, false);
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
-  };
   window.addEventListener('resize', layout);
   layout();
+  refreshHud();
 
   const gl = renderer.getContext();
   const stats = { frames: 0, xrFrames: 0, renderErrors: 0, lastError: '', glError: 0 };
@@ -152,7 +224,7 @@ export function mountXrProbe(container: HTMLElement, config: ExperienceConfig): 
       sessionReport(renderer, overlayRoot),
       `frames ${stats.frames} xrFrames ${stats.xrFrames} renderErr ${stats.renderErrors} gl 0x${stats.glError.toString(16)}`,
       `reticle vis=${reticle?.visible ?? '-'} anchor vis=${anchor.visible}`,
-      `${step === 'cube' ? 'cube' : 'plane'} ${mesh.material.type} ${mesh.scale.x.toFixed(2)}x${mesh.scale.y.toFixed(2)} @${f2(v2)} camera @${f2(v1)} dist ${v1.distanceTo(v2).toFixed(2)} m inView=${frustum.intersectsObject(mesh)}`,
+      `${step === 'cube' ? 'cube' : 'plane'} vis=${mesh.visible} ${mesh.material.type} ${mesh.scale.x.toFixed(2)}x${mesh.scale.y.toFixed(2)} @${f2(v2)} camera @${f2(v1)} dist ${v1.distanceTo(v2).toFixed(2)} m inView=${frustum.intersectsObject(mesh)}`,
       clip
         ? `video rs=${v!.readyState} ${v!.videoWidth}x${v!.videoHeight} t=${v!.currentTime.toFixed(2)} paused=${v!.paused} state=${clip.state} frameReady=${clip.frameReady} texture v${clip.texture.version}`
         : 'video none',
@@ -174,6 +246,7 @@ export function mountXrProbe(container: HTMLElement, config: ExperienceConfig): 
         lastVideoTime = v.currentTime;
         clip.texture.needsUpdate = true;
       }
+      if (has('visibility')) mesh.visible = !!clip?.frameReady && clip.state !== 'error';
       renderer.render(scene, camera);
       const e = gl.getError();
       if (e) stats.glError = e;
@@ -202,13 +275,16 @@ export function mountXrProbe(container: HTMLElement, config: ExperienceConfig): 
     ar.dispose();
     clip?.dispose();
     window.removeEventListener('resize', layout);
-    overlayRoot.removeEventListener('beforexrselect', blockXrSelect);
+    selectRoot.removeEventListener('beforexrselect', blockXrSelect);
     document.documentElement.classList.remove('ar-active');
     removeStageFlag();
     mesh.geometry.dispose();
     mesh.material.dispose();
     readout.remove();
-    hud.remove();
+    probeDiv.remove();
+    hud?.dispose();
+    floor?.dispose();
+    placeholder.dispose();
     if (overlayRoot !== container) overlayRoot.remove();
     renderer.dispose();
     renderer.domElement.remove();

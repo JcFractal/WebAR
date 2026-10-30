@@ -1,11 +1,11 @@
 # AR Greetings — living handoff
-Last updated: October 30, 2026 (G1 S24 failure, AR diagnostics, Devin)
+Last updated: October 30, 2026 (G1 S24 probe ladder passed; full-page difference ladder, Devin)
 Update this file in every implementation PR and before pausing or switching tools.
 
 ## Current status
 - Stage: G1 **failed** its first S24 test (no video visible after AR placement; details below). A fix attempt plus temporary AR diagnostics are on PR #8; S24 retest pending. G2 not started and paused (do not start until G1 passes and Juan assigns G2).
 - Active agent: Devin (G1). Stopped before G2.
-- Current authorized next assignment: Juan runs the probe ladder (cube passed; plane → video element → video texture → video shader, one change each) to find the first step that fails; then fix G1 on PR #8. G2 only if he assigns it.
+- Current authorized next assignment: find which video-page difference makes opaque video disappear in AR (probe ladder 1–5 all passed on the S24; steps 6–10 add the video page's differences one at a time), then fix G1 on PR #8 so the full greeting page shows opaque video with sound. Background removal stays out of this. G2 only if he assigns it.
 - Repository: https://github.com/JcFractal/WebAR
 - Observed baseline main: accf90a1b6b968001edfbfb8e71314b994bacdd7.
 - Greeting branch / commit / PR: `devin/g1-video-placement`; G1 code commit a1fd865ea68f7e449f6c0a7265a42f760f6514b5 plus a later handoff-only commit (check the branch tip); PR https://github.com/JcFractal/WebAR/pull/8 (open, not merged).
@@ -16,7 +16,7 @@ Update this file in every implementation PR and before pausing or switching tool
 - Credentials: none supplied or created in this planning task.
 - Personal test clips: none supplied. The repo contains only a generated synthetic fixture (`public/media/synthetic-greeting.mp4`, made by `scripts/make-synthetic-fixture.py`).
 - Current blocker: the AR invisibility cause is not yet identified. The `&diag` readout on the S24 looked healthy (see isolation section), so the next step tests whether any WebGL geometry renders in AR at all. It affects both the synthetic fixture and Juan's MP4 (shared AR rendering path) and needs the S24 diagnostic readout. The preview requires Vercel sign-in.
-- Next concrete action: Juan runs the probe ladder below and reports the first failing step; Devin makes no further fix until then.
+- Next concrete action: Juan runs one S24 test, `&probe&step=hud` (all five differences together); the result decides the next single test (see "Full-page difference ladder"). Devin makes no fix until the first failing difference is known.
 
 ## Milestone tracking
 | Milestone | Code/status | Browser checks | Phone checks | PR / commit |
@@ -175,6 +175,26 @@ Open each link on https://web-ar-git-devin-g1-video-placement-jc-fractal-studios
 - `/?exp=greeting-test&probe&step=video-shader`
 Still to do: the Neon Garden particle recheck on the same phone/browser, and the ARCore version.
 
+### Probe ladder PASSED on the S24 (2026-10-30, fourth round)
+Confirmed (Juan, four screenshots), each with the default XR setup:
+2. `step=plane`: magenta upright plane visible.
+3. `step=video-element`: magenta plane visible, hidden video playing, sound audible.
+4. `step=video-texture`: video visible through the plain material.
+5. `step=video-shader`: video visible through the app's keying shader in Opaque mode; readout `step=video-shader (5/5)`, renderErr 0, gl 0x0, state=playing.
+So the `<video>` element, VideoTexture updates and the custom shader each render in AR on this phone. The failure comes from something only the full video page (`src/video/mount.ts`) does.
+
+### Full-page difference ladder (steps 6–10)
+Control: `step=video-shader` (passed). Each step adds one difference copied from `mountVideo`, cumulatively:
+6. `placeholder`: material created with an empty `THREE.Texture` placeholder, clip texture swapped into the uniform afterwards (as `setClip`).
+7. `visibility`: plane starts hidden; `plane.visible = frameReady && state !== 'error'` every frame (video page rule).
+8. `floor`: the `GridHelper` floor in the scene, hidden while AR is active.
+9. `layout`: the video page's `layout()` (pixel ratio, size and preview-camera framing on clip change, resize and AR exit) and "searching pauses and rewinds".
+10. `hud`: the full video HUD (transport, Choose MP4, Adjust appearance, Fullscreen, tune panel) and its `beforexrselect` rule on the container, replacing the probe buttons. Local file choice is not wired in the probe.
+Not covered by the ladder: diagnostic markers (only with `&diag`; the failure predates them) and the local-file flow (the synthetic clip fails the same way).
+
+Test order, one S24 test per round (bisection over the cumulative steps):
+- First: `step=hud`. If it **passes**, the ladder does not reproduce the failure; the cause is outside it (for example element order in `mountVideo`, user actions like Fullscreen, or something not yet copied), and the next test compares the real page against `step=hud`. If it **fails**, test `step=visibility`; then `placeholder` or `layout`/`floor` to pin the first failing step.
+
 ## Device evidence log
 | Date | Device / OS / browser | Feature and test | Result | Reporter / evidence |
 | --- | --- | --- | --- | --- |
@@ -188,7 +208,9 @@ Still to do: the Neon Garden particle recheck on the same phone/browser, and the
 | G1 2026-10-30 | Headless Chrome 137, no WebXR | Probe page and `layer`/`overlay`/`stage` flags (preview path only) | 48/48 simulated pass; cannot test XR output | Devin, PR #8 |
 | G1 2026-10-30 | S24 Ultra SM-S928U / Android 17 / Chrome 156.0.8078.73 | Baseline `&probe` (reticle + untextured cube), default flags, XRProjectionLayer, canvas in overlay root and CSS-hidden | Reticle shown, cube placed and **visibly rendered**, walk-around OK. PASS | Juan; screenshot |
 | G1 2026-10-30 | Headless Chrome 137, no WebXR | Probe ladder steps plane / video-element / video-texture / video-shader (preview path only) | 57/57 simulated pass; cannot test XR output | Devin, PR #8 |
-| G1 2026-10-30 | S24 Ultra / Chrome 156 | Probe ladder steps 2–5; Neon Garden particle recheck | Pending | Juan |
+| G1 2026-10-30 | S24 Ultra SM-S928U / Android 17 / Chrome 156.0.8078.73 | Probe ladder steps 2–5: plane, video-element, video-texture, video-shader (Opaque) | All four visible; video-element and later audible; renderErr 0, gl 0x0. PASS | Juan; four screenshots |
+| G1 2026-10-30 | Headless Chrome 137, no WebXR | Probe steps 6–10 placeholder / visibility / floor / layout / hud (preview path only) | 68/68 simulated pass; cannot test XR output | Devin, PR #8 |
+| G1 2026-10-30 | S24 Ultra / Chrome 156 | Probe `step=hud`; Neon Garden particle recheck | Pending | Juan |
 
 Add video decode/format, audio start/middle/end, keying/matte edges, Reset/Exit/re-entry, QR signed-out launch and iPhone fallback rows as they are actually tested. Never carry historical particle success forward as proof that video works.
 

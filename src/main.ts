@@ -93,7 +93,10 @@ async function showExperience(id: string): Promise<void> {
     overlay.append(el('h1', 'player-title', config.title), back);
     if (config.brand?.name) overlay.append(el('p', 'brand', config.brand.name));
     root.append(overlay);
-    const mount = await loadTemplate(config);
+    // `&probe`: temporary AR geometry isolation test (see src/xr/probe.ts); the config only names the page.
+    const mount = new URLSearchParams(window.location.search).has('probe')
+      ? (await import('./xr/probe')).mountXrProbe
+      : await loadTemplate(config);
     app.replaceChildren(root);
 
     const dispose = mount(root);

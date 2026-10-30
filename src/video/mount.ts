@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { KEYING_DEFAULTS, VIDEO_DEFAULTS, type VideoExperienceConfig } from '../config';
 import { ArPlacement, isArSupported, type ArState } from '../xr/ar';
+import { applyStageFlag, createXrRenderer, describeFlags, layerReport, overlayRootFor, readXrTestFlags, sessionReport } from '../xr/options';
 import { VideoClip, liveObjectUrlCount } from './clip';
 import { applyKeying, createVideoMaterial } from './material';
 import { PLANE_MODES, PLANE_MODE_LABELS, PlacementMarkers, type PlaneMaterialMode } from './diagnostics';
@@ -34,10 +35,13 @@ export function mountVideo(container: HTMLElement, config: VideoExperienceConfig
   const diag = params.has('diag');
 
   // Same context settings as the swarm template, whose AR rendering is verified on the S24.
-  const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+  const flags = readXrTestFlags(params);
+  const renderer = createXrRenderer({ antialias: false, powerPreference: 'high-performance' }, flags);
   renderer.setClearColor(BACKGROUNDS.dark, 1);
   renderer.domElement.className = 'stage';
   container.prepend(renderer.domElement);
+  const overlayRoot = overlayRootFor(container, flags);
+  const removeStageFlag = applyStageFlag(flags);
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(FOV, 1, 0.01, 50);
@@ -61,7 +65,7 @@ export function mountVideo(container: HTMLElement, config: VideoExperienceConfig
   const applyPlaneMode = () => {
     plane.material = planeMode === 'shader' ? material : planeMode === 'basic' ? basicMaterial : solidMaterial;
   };
-  const ar = new ArPlacement(renderer, scene, anchor, container, 0, { noun: 'greeting', fallback: 'normal video preview' });
+  const ar = new ArPlacement(renderer, scene, anchor, overlayRoot, 0, { noun: 'greeting', fallback: 'normal video preview' });
 
   let soundOn = true;
   let clip: VideoClip | null = null;
@@ -143,7 +147,7 @@ export function mountVideo(container: HTMLElement, config: VideoExperienceConfig
     else void clip.play(soundOn);
   };
 
-  const hud = createVideoHud(container, tune, allowLocal, diag, {
+  const hud = createVideoHud(overlayRoot, tune, allowLocal, diag, {
     playPause,
     replay: () => {
       if (!clip || (ar.active && ar.state !== 'placed')) return;
@@ -266,9 +270,10 @@ export function mountVideo(container: HTMLElement, config: VideoExperienceConfig
     frustum.setFromProjectionMatrix(viewProj);
     plane.updateWorldMatrix(true, false);
     const v = clip?.video;
-    const layer = xr ? renderer.xr.getBaseLayer() : null;
     return [
-      `xr ${xr ? 'on' : 'off'} ar=${ar.state} blend=${xr ? renderer.xr.getEnvironmentBlendMode() : '-'} layer=${layer ? layer.constructor.name : '-'}`,
+      `flags: ${describeFlags(flags)}`,
+      `xr ${xr ? 'on' : 'off'} ar=${ar.state} ${layerReport(renderer)}`,
+      sessionReport(renderer, overlayRoot),
       `frames ${stats.frames} xrFrames ${stats.xrFrames} renderErr ${stats.renderErrors} gl 0x${stats.glError.toString(16)}`,
       `anchor vis=${anchor.visible} @${f2(v2)}`,
       `camera @${f2(v1)} dist ${v1.distanceTo(v3).toFixed(2)} m`,
@@ -338,6 +343,7 @@ export function mountVideo(container: HTMLElement, config: VideoExperienceConfig
     container.removeEventListener('beforexrselect', blockXrSelect);
     ar.dispose();
     document.documentElement.classList.remove('ar-active');
+    removeStageFlag();
     renderer.setAnimationLoop(null);
     clip?.dispose();
     clip = null;
@@ -355,6 +361,7 @@ export function mountVideo(container: HTMLElement, config: VideoExperienceConfig
     floor.dispose();
     renderer.dispose();
     renderer.domElement.remove();
+    if (overlayRoot !== container) overlayRoot.remove();
     if (debug) delete (window as unknown as Record<string, unknown>).__webar;
   };
 }

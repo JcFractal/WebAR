@@ -5,7 +5,7 @@ Update this file in every implementation PR and before pausing or switching tool
 ## Current status
 - Stage: G1 **failed** its first S24 test (no video visible after AR placement; details below). A fix attempt plus temporary AR diagnostics are on PR #8; S24 retest pending. G2 not started and paused (do not start until G1 passes and Juan assigns G2).
 - Active agent: Devin (G1). Stopped before G2.
-- Current authorized next assignment: Juan's focused S24 retest (diagnostic test below), then fix G1 on PR #8 as needed. G2 only if he assigns it.
+- Current authorized next assignment: Juan's controlled S24 isolation tests (probe pages below, one variable each), then fix G1 on PR #8 once the cause is narrowed. G2 only if he assigns it.
 - Repository: https://github.com/JcFractal/WebAR
 - Observed baseline main: accf90a1b6b968001edfbfb8e71314b994bacdd7.
 - Greeting branch / commit / PR: `devin/g1-video-placement`; G1 code commit a1fd865ea68f7e449f6c0a7265a42f760f6514b5 plus a later handoff-only commit (check the branch tip); PR https://github.com/JcFractal/WebAR/pull/8 (open, not merged).
@@ -15,8 +15,8 @@ Update this file in every implementation PR and before pausing or switching tool
 - Processing provider and media format: undecided; G2 owns the decision.
 - Credentials: none supplied or created in this planning task.
 - Personal test clips: none supplied. The repo contains only a generated synthetic fixture (`public/media/synthetic-greeting.mp4`, made by `scripts/make-synthetic-fixture.py`).
-- Current blocker: the AR invisibility cause is not yet identified. It affects both the synthetic fixture and Juan's MP4 (shared AR rendering path) and needs the S24 diagnostic readout. The preview requires Vercel sign-in.
-- Next concrete action: Juan runs the focused diagnostic retest below and sends screenshots of the readout; Devin fixes the identified cause on PR #8.
+- Current blocker: the AR invisibility cause is not yet identified. The `&diag` readout on the S24 looked healthy (see isolation section), so the next step tests whether any WebGL geometry renders in AR at all. It affects both the synthetic fixture and Juan's MP4 (shared AR rendering path) and needs the S24 diagnostic readout. The preview requires Vercel sign-in.
+- Next concrete action: Juan runs the five-page S24 isolation test below and sends screenshots; Devin makes no further fix until those results narrow the cause.
 
 ## Milestone tracking
 | Milestone | Code/status | Browser checks | Phone checks | PR / commit |
@@ -133,6 +133,29 @@ Open https://web-ar-git-devin-g1-video-placement-jc-fractal-studios.vercel.app/?
 3. Tap "Plane:" once (plain video material) and screenshot, then once more (solid magenta) and screenshot.
 4. If the video is visible: run checklist items 3–9 below, then 2 (Chroma with the test clip) and 10.
 
+### S24 diagnostic result and controlled isolation (2026-10-30, second round)
+Confirmed phone environment (Juan): Samsung SM-S928U (S24 Ultra), Android 17, build CP2A.260605.016, Chrome 156.0.8078.73. ARCore / Google Play Services for AR version: not yet recorded.
+
+Confirmed on the phone with `&diag` (Juan, screenshot): layer `XRProjectionLayer`; XR frame counter advancing; `renderErr 0`; `gl 0x0`; plane `vis=true` and `inView=true`; `frameReady=true`; keying `opaque`. Video still not visible. So the render loop is alive, throws nothing, and the plane is placed in front of the camera; the earlier "loop dying" and "placement/frustum" branches are not supported by this evidence.
+
+Hypotheses (unconfirmed, each tested separately below):
+- H1: no WebGL scene content at all reaches the AR view on this phone/Chrome (not specific to video). Tested by the probe page: reticle plus one untextured cube, no `<video>`, no texture, no custom shader, no microphone.
+- H2: the DOM overlay root contains the WebGL canvas (the whole `.player` is the root), and that interacts badly with the XR compositor. Tested with `overlay=hud`: a HUD-only child element is the overlay root and the canvas sits outside it.
+- H3: the CSS rule `html.ar-active .stage { visibility: hidden }` affects the XR output. Tested with `stage=visible`, which keeps the canvas visible during AR. Default behaviour is unchanged; this is neither assumed harmless nor assumed to be the cause.
+- H4: the `XRProjectionLayer` path that three r185 selects is the problem. Tested with `layer=legacy`: `XRWebGLBinding` is hidden only while that page's renderer is constructed (restored immediately; no prototype changes), so three uses `XRWebGLLayer`. The readout reports the layer actually selected (`renderer.xr.getBaseLayer()` constructor plus `session.renderState` layers/baseLayer).
+- Related evidence only, not a diagnosis: three.js issue #33404 (camera-access crashes, Chrome 147/148 regression, fixes reported in 149). The app does not request the `layers` feature; three can still select a projection layer, so H4 is tested directly.
+
+Implementation (temporary, opt-in; normal URLs unchanged): `src/xr/probe.ts` (probe page, `&probe`), `src/xr/options.ts` (the three flags), routing in `src/main.ts`, two CSS rules in `src/style.css`. The video page also accepts the same three flags so a variant that fixes the probe can be confirmed on video. Swarm/particle code untouched. Readout adds flags, layer actually used, renderState, blend mode, DOM overlay type, enabled features, whether the canvas is inside the overlay root and its computed visibility.
+
+### S24 isolation test (one variable per page)
+All on https://web-ar-git-devin-g1-video-placement-jc-fractal-studios.vercel.app (signed in to Vercel). For each: Enter AR, scan, tap to place, one screenshot showing readout and room. Note: is the reticle visible while scanning? Is the cube visible after tapping?
+1. Baseline probe: `/?exp=greeting-test&probe`
+2. Overlay root HUD-only, canvas outside: `/?exp=greeting-test&probe&overlay=hud`
+3. Canvas not hidden by CSS: `/?exp=greeting-test&probe&stage=visible`
+4. Legacy layer: `/?exp=greeting-test&probe&layer=legacy` (readout should say `layer XRWebGLLayer`)
+5. Particle recheck, same phone/browser: https://web-ar-gold.vercel.app/?exp=neon-garden , Enter AR, place, are particles visible? (Cosmic Vortex too if practical.)
+If a probe variant shows the cube where 1 does not, open the video page with the same flag, e.g. `/?exp=greeting-test&diag&layer=legacy`.
+
 ## Device evidence log
 | Date | Device / OS / browser | Feature and test | Result | Reporter / evidence |
 | --- | --- | --- | --- | --- |
@@ -142,6 +165,9 @@ Open https://web-ar-git-devin-g1-video-placement-jc-fractal-studios.vercel.app/?
 | G1 2026-10-30 | S24 Ultra / Chrome (versions unrecorded) | Juan's own ordinary MP4 (no green screen), preview then AR | Normal preview: displays and plays with sound. AR: camera opens, scan + tap shows "Placed", playback/audio runs, **no video visible**. FAIL | Juan; two screenshots |
 | G1 2026-10-30 | S24 Ultra / Chrome | Included synthetic test clip, preview then AR | Normal preview plays. AR: "Placed" and audio, **no video visible** (same as his MP4). FAIL | Juan (report) |
 | G1 2026-10-30 | Headless Chrome 137, no WebXR | `&diag` readout, Plane material cycle, Opaque defaults, loop kept alive | 39/39 simulated pass; does not reproduce or resolve the phone failure | Devin, PR #8 |
+| G1 2026-10-30 | S24 Ultra SM-S928U / Android 17 (CP2A.260605.016) / Chrome 156.0.8078.73; ARCore unrecorded | Video page `&diag`, Opaque | Readout: XRProjectionLayer, XR frames advancing, renderErr 0, gl 0, plane visible and in view, frameReady true. **Video still not visible.** FAIL | Juan; screenshot |
+| G1 2026-10-30 | Headless Chrome 137, no WebXR | Probe page and `layer`/`overlay`/`stage` flags (preview path only) | 48/48 simulated pass; cannot test XR output | Devin, PR #8 |
+| G1 2026-10-30 | S24 Ultra / Chrome 156 | Probe isolation pages 1–4, Neon Garden particle recheck | Pending | Juan |
 
 Add video decode/format, audio start/middle/end, keying/matte edges, Reset/Exit/re-entry, QR signed-out launch and iPhone fallback rows as they are actually tested. Never carry historical particle success forward as proof that video works.
 

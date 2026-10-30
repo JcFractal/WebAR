@@ -170,6 +170,10 @@ h1 { font-size: clamp(1.6rem, 6vw, 2.4rem); margin: 0.2rem 0 1.2rem; }
 /* Immersive AR: the camera feed shows through; the DOM overlay keeps only the HUD. */
 html.ar-active, html.ar-active body, html.ar-active #app, html.ar-active .player { background: transparent !important; }
 html.ar-active .stage, html.ar-active .fps { visibility: hidden; }
+html.ar-active.ar-stage-visible .stage { visibility: visible; }
+.ar-overlay-root { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.ar-overlay-root > * { pointer-events: auto; }
+.ar-overlay-root > .hud { pointer-events: none; }
 .ar-status[hidden] { display: none; }
 .ar-status { pointer-events: none; font-weight: 600; }
 

@@ -15,7 +15,7 @@ Update this file in every implementation PR and before pausing or switching tool
 - Processing provider and media format: undecided; G2 owns the decision.
 - Credentials: none supplied or created in this planning task.
 - Personal test clips: none supplied. The repo contains only a generated synthetic fixture (`public/media/synthetic-greeting.mp4`, made by `scripts/make-synthetic-fixture.py`).
-- Current blocker: the AR invisibility cause is not yet identified; it needs the S24 diagnostic readout. The preview requires Vercel sign-in.
+- Current blocker: the AR invisibility cause is not yet identified. It affects both the synthetic fixture and Juan's MP4 (shared AR rendering path) and needs the S24 diagnostic readout. The preview requires Vercel sign-in.
 - Next concrete action: Juan runs the focused diagnostic retest below and sends screenshots of the readout; Devin fixes the identified cause on PR #8.
 
 ## Milestone tracking
@@ -108,10 +108,12 @@ Update this file in every implementation PR and before pausing or switching tool
 ## G1 S24 failure and AR rendering investigation (2026-10-30)
 Observed by Juan on the S24 (Chrome): his own ordinary MP4 (original background, no green screen) displays and plays with sound in the normal preview. Enter AR opens the camera; after scanning and tapping, the UI says "Placed" and playback/audio run, but no video is visible.
 
+Follow-up from Juan: the included synthetic test clip fails the same way. Both clips play in the ordinary preview, and in AR both report "Placed" with audio but show no video. The failure is therefore in the shared AR rendering path, not in his file's codec, content or green-screen settings, and the investigation focuses there. Further code changes wait for the diagnostic results below (no more speculative fixes).
+
 Not reproducible here: the VM has no WebXR device, so headless checks can neither reproduce nor confirm a fix. The cause is not identified yet.
 
 Code inspection of the AR rendering path:
-- Keying: in Opaque mode the shader always writes alpha 1 and never discards, so Opaque alone cannot make the plane invisible. But the fixture config defaulted to Chroma and a chosen local file kept that mode, so Juan's test ran with Chroma. Now the fixture defaults to Opaque and choosing a local MP4 switches keying to Opaque.
+- Keying: in Opaque mode the shader always writes alpha 1 and never discards, so Opaque alone cannot make the plane invisible. Both clips ran with Chroma (the fixture config defaulted to it and a chosen local file kept it), but Chroma on the synthetic clip removes only the green and would still leave the figure visible, so keying does not explain an entirely invisible plane. The fixture and chosen local files now start in Opaque only to remove that variable.
 - Renderer: the video template created its WebGL context with `antialias: true`; the swarm template, whose AR is verified on the S24, uses `antialias: false`. It now matches the swarm (the XR layer inherits this setting).
 - Texture updates: three r185 `VideoTexture` uploads new frames only from `requestVideoFrameCallback`, which is tied to window rendering and may not fire during an immersive session. That would freeze the picture rather than hide it, but the render loop now flags `needsUpdate` whenever `currentTime` advances.
 - Loop failure: three requests the next XR frame only after the animation callback returns, so any exception in the callback (for example on the first frame the plane is drawn) would stop all later XR rendering while audio continues. The callback now catches errors, keeps the loop alive and reports them.
@@ -138,6 +140,7 @@ Open https://web-ar-git-devin-g1-video-placement-jc-fractal-studios.vercel.app/?
 | Planning 2026-10-29 | No device | No new physical tests | Not tested | Planning session |
 | G1 2026-10-30 | Headless Chrome 137 (cloud VM), no WebXR | G1 playback, keying, local-file lifecycle, regressions | 30/30 simulated pass; not device evidence | Devin, PR #8 |
 | G1 2026-10-30 | S24 Ultra / Chrome (versions unrecorded) | Juan's own ordinary MP4 (no green screen), preview then AR | Normal preview: displays and plays with sound. AR: camera opens, scan + tap shows "Placed", playback/audio runs, **no video visible**. FAIL | Juan; two screenshots |
+| G1 2026-10-30 | S24 Ultra / Chrome | Included synthetic test clip, preview then AR | Normal preview plays. AR: "Placed" and audio, **no video visible** (same as his MP4). FAIL | Juan (report) |
 | G1 2026-10-30 | Headless Chrome 137, no WebXR | `&diag` readout, Plane material cycle, Opaque defaults, loop kept alive | 39/39 simulated pass; does not reproduce or resolve the phone failure | Devin, PR #8 |
 
 Add video decode/format, audio start/middle/end, keying/matte edges, Reset/Exit/re-entry, QR signed-out launch and iPhone fallback rows as they are actually tested. Never carry historical particle success forward as proof that video works.

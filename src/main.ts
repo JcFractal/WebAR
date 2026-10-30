@@ -1,7 +1,7 @@
 import './style.css';
 import { ExperienceLoadError, loadExperience, loadManifest } from './config';
 import { publicExperienceUrl } from './site';
-import { templateRegistry } from './templates';
+import { loadTemplate } from './templates';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
@@ -32,30 +32,38 @@ async function showEntry(): Promise<void> {
   app.replaceChildren(page);
 
   try {
-    const experiences = await loadManifest();
-    const list = el('ul', 'experience-list');
+    const all = await loadManifest();
     const QRCode = (await import('qrcode')).default;
-    for (const exp of experiences) {
-      // Link and QR share one payload from the documented public base URL.
-      const url = publicExperienceUrl(exp.id);
-      const item = el('li', 'experience-card');
-      const link = el('a', 'card', exp.title);
-      link.href = url;
-      const qr = el('div', 'qr');
-      qr.dataset.payload = url;
-      qr.setAttribute('role', 'img');
-      qr.setAttribute('aria-label', `QR code for ${exp.title}`);
-      qr.innerHTML = await QRCode.toString(url, { type: 'svg', margin: 2, errorCorrectionLevel: 'M' });
-      const urlText = el('a', 'qr-url', url);
-      urlText.href = url;
-      const download = el('a', 'qr-download', 'Download QR (PNG)');
-      download.href = await QRCode.toDataURL(url, { width: 768, margin: 2, errorCorrectionLevel: 'M' });
-      download.download = `${exp.id}-qr.png`;
-      item.append(link, qr, urlText, download);
-      list.append(item);
+    const renderList = async (experiences: typeof all): Promise<HTMLUListElement> => {
+      const list = el('ul', 'experience-list');
+      for (const exp of experiences) {
+        // Link and QR share one payload from the documented public base URL.
+        const url = publicExperienceUrl(exp.id);
+        const item = el('li', 'experience-card');
+        const link = el('a', 'card', exp.title);
+        link.href = url;
+        const qr = el('div', 'qr');
+        qr.dataset.payload = url;
+        qr.setAttribute('role', 'img');
+        qr.setAttribute('aria-label', `QR code for ${exp.title}`);
+        qr.innerHTML = await QRCode.toString(url, { type: 'svg', margin: 2, errorCorrectionLevel: 'M' });
+        const urlText = el('a', 'qr-url', url);
+        urlText.href = url;
+        const download = el('a', 'qr-download', 'Download QR (PNG)');
+        download.href = await QRCode.toDataURL(url, { width: 768, margin: 2, errorCorrectionLevel: 'M' });
+        download.download = `${exp.id}-qr.png`;
+        item.append(link, qr, urlText, download);
+        list.append(item);
+      }
+      return list;
+    };
+    const demos = all.filter((e) => !e.test);
+    const tests = all.filter((e) => e.test);
+    if (demos.length === 0) page.append(el('p', 'muted', 'No experiences are published yet.'));
+    page.append(await renderList(demos));
+    if (tests.length > 0) {
+      page.append(el('h2', 'gallery-section', 'Test fixtures (not demo content)'), await renderList(tests));
     }
-    if (experiences.length === 0) page.append(el('p', 'muted', 'No experiences are published yet.'));
-    page.append(list);
   } catch (err) {
     page.append(el('p', 'error-text', err instanceof Error ? err.message : 'The experience list could not be loaded.'));
   }
@@ -85,10 +93,13 @@ async function showExperience(id: string): Promise<void> {
     overlay.append(el('h1', 'player-title', config.title), back);
     if (config.brand?.name) overlay.append(el('p', 'brand', config.brand.name));
     root.append(overlay);
-    const mount = await templateRegistry[config.template]();
+    // `&probe`: temporary AR geometry isolation test (see src/xr/probe.ts); the config only names the page.
+    const mount = new URLSearchParams(window.location.search).has('probe')
+      ? ((m) => (root: HTMLElement) => m.mountXrProbe(root, config))(await import('./xr/probe'))
+      : await loadTemplate(config);
     app.replaceChildren(root);
 
-    const dispose = mount(root, config);
+    const dispose = mount(root);
     window.addEventListener('pagehide', dispose, { once: true });
     // Restored from the back/forward cache after dispose: start fresh rather than show a dead canvas.
     window.addEventListener('pageshow', (e) => {

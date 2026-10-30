@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { VoiceAnalyzer, type VoiceFrame } from '../audio/analysis';
 import { MicInput, type MicStatus } from '../audio/mic';
-import { AUDIO_DEFAULTS, SWARM_DEFAULTS, type AudioSettings, type ExperienceConfig, type SwarmTuning } from '../config';
+import { AUDIO_DEFAULTS, SWARM_DEFAULTS, type AudioSettings, type SwarmExperienceConfig, type SwarmTuning } from '../config';
 import { SwarmControls, type ControlTiming } from './controls';
 import { Swarm } from './swarm';
 import { ArPlacement, isArSupported } from '../xr/ar';
@@ -13,7 +13,7 @@ const FOV = 50;
 const FRAME_MARGIN = 1.55;
 const DIAG_INTERVAL = 0.2;
 
-export function mountSwarm(container: HTMLElement, config: ExperienceConfig): () => void {
+export function mountSwarm(container: HTMLElement, config: SwarmExperienceConfig): () => void {
   const s = config.settings;
   const tuning: SwarmTuning = { ...SWARM_DEFAULTS, ...s.swarm };
   const audio: AudioSettings = { ...AUDIO_DEFAULTS, ...s.audio };

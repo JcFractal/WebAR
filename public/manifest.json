@@ -1,6 +1,7 @@
 {
   "experiences": [
     { "id": "neon-garden", "title": "Neon Garden" },
-    { "id": "cosmic-vortex", "title": "Cosmic Vortex" }
+    { "id": "cosmic-vortex", "title": "Cosmic Vortex" },
+    { "id": "greeting-test", "title": "Video greeting test (synthetic clip)", "test": true }
   ]
 }

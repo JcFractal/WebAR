@@ -170,6 +170,10 @@ h1 { font-size: clamp(1.6rem, 6vw, 2.4rem); margin: 0.2rem 0 1.2rem; }
 /* Immersive AR: the camera feed shows through; the DOM overlay keeps only the HUD. */
 html.ar-active, html.ar-active body, html.ar-active #app, html.ar-active .player { background: transparent !important; }
 html.ar-active .stage, html.ar-active .fps { visibility: hidden; }
+html.ar-active.ar-stage-visible .stage { visibility: visible; }
+.ar-overlay-root { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.ar-overlay-root > * { pointer-events: auto; }
+.ar-overlay-root > .hud { pointer-events: none; }
 .ar-status[hidden] { display: none; }
 .ar-status { pointer-events: none; font-weight: 600; }
 
@@ -182,3 +186,16 @@ html.ar-active .stage, html.ar-active .fps { visibility: hidden; }
 .qr-url { font-size: 0.8rem; color: var(--muted, #9aa3b5); word-break: break-all; text-align: center; }
 .qr-download { font-size: 0.85rem; color: var(--accent); }
 @media (min-width: 720px) { .page:has(.experience-list) { max-width: 46rem; } .experience-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; } }
+
+/* Video greeting template */
+.video-source { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.video-note { max-width: 36rem; color: var(--muted); font-size: 0.8rem; }
+.video-note[hidden], .hud-hint-row[hidden] { display: none; }
+.hud-button:disabled { opacity: 0.5; cursor: default; }
+.tune-check { grid-template-columns: auto 1fr; align-items: center; gap: 0.5rem; }
+.tune-row input[type='color'] { width: 100%; height: 2rem; border: 1px solid #2a3142; border-radius: 0.4rem; background: #0d1018; }
+.tune-panel .hud-chip { pointer-events: auto; font: inherit; color: var(--fg); cursor: pointer; }
+.gallery-section { margin: 2rem 0 0.75rem; font-size: 1rem; color: var(--muted); }
+.test-badge { font-size: 0.75rem; color: #ffb347; }
+.diag-readout { position: absolute; top: 3.5rem; left: 0.5rem; right: 0.5rem; z-index: 5; margin: 0; padding: 0.4rem 0.5rem; font: 11px/1.35 ui-monospace, monospace; color: #7dffd8; background: #000000b3; border-radius: 0.4rem; white-space: pre-wrap; word-break: break-all; pointer-events: none; }
+.diag-readout[hidden] { display: none; }

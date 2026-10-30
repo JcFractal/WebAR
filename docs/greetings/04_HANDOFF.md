@@ -71,7 +71,7 @@ Update this file in every implementation PR and before pausing or switching tool
   - `npm run build`: OK.
   - `npm test`: 12/12 pass. Both particle configs validate as swarm; manifest order; video config accept/reject cases; local-file checks, error wording, plane size and color math.
 - Static/code inspection: `ArPlacement` is reused unchanged apart from its wording. The swarm mount changed only in its config type. Particle JSON and audio tuning are untouched.
-- Browser/simulated tests actually run: a headless Chrome 137 CDP script against `npm run preview` (412×915 mobile emulation, SwiftShader WebGL, no WebXR); 30/30 pass.
+- Browser/simulated tests actually run: a headless Chrome 137 CDP script against `npm run preview` (412×915 mobile emulation, SwiftShader WebGL, no WebXR); 30/30 pass at a1fd865. After the S24 failure the script grew to 39/39 (adds `&diag` readout, Plane material cycle, Opaque defaults for the fixture and local files, loop still running); all pass.
   - Gallery: both particle links unchanged and first; test section separate; 3 QR codes.
   - Particles: Neon Garden and Cosmic Vortex mount with no page errors and no microphone request on load.
   - Invalid IDs: `does-not-exist`, `..%2Fmanifest` and `NEON-GARDEN` show the error page.

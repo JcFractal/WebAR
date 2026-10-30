@@ -1,11 +1,11 @@
 # AR Greetings — living handoff
-Last updated: October 30, 2026 (G1 S24 probe step=hud passed; real-page comparison, Devin)
+Last updated: October 30, 2026 (G1 AR invisibility no longer reproduces on the S24; remaining acceptance checks, Devin)
 Update this file in every implementation PR and before pausing or switching tools.
 
 ## Current status
-- Stage: G1 **failed** its first S24 test (no video visible after AR placement; details below). A fix attempt plus temporary AR diagnostics are on PR #8; S24 retest pending. G2 not started and paused (do not start until G1 passes and Juan assigns G2).
+- Stage: G1 in review on PR #8. The AR invisibility from the first S24 tests **no longer reproduces**: on the real greeting page both the synthetic clip (with and without `&diag`) and Juan's local MP4 are visible and play with sound after placement. **The cause is unknown**; no change is a proven fix (see the investigation section). The remaining G1 acceptance checks below are not yet done. G2 not started and paused (do not start until G1 passes and Juan assigns G2).
 - Active agent: Devin (G1). Stopped before G2.
-- Current authorized next assignment: find which video-page difference makes opaque video disappear in AR (probe ladder 1–5 all passed on the S24; steps 6–10 add the video page's differences one at a time), then fix G1 on PR #8 so the full greeting page shows opaque video with sound. Background removal stays out of this. G2 only if he assigns it.
+- Current authorized next assignment: finish the remaining G1 acceptance checks on the S24, one at a time, fixing G1 problems on PR #8. No more isolation tests. Automatic background removal and G2 stay paused; PR #8 stays unmerged until the G1 review is done.
 - Repository: https://github.com/JcFractal/WebAR
 - Observed baseline main: accf90a1b6b968001edfbfb8e71314b994bacdd7.
 - Greeting branch / commit / PR: `devin/g1-video-placement`; G1 code commit a1fd865ea68f7e449f6c0a7265a42f760f6514b5 plus a later handoff-only commit (check the branch tip); PR https://github.com/JcFractal/WebAR/pull/8 (open, not merged).
@@ -15,13 +15,13 @@ Update this file in every implementation PR and before pausing or switching tool
 - Processing provider and media format: undecided; G2 owns the decision.
 - Credentials: none supplied or created in this planning task.
 - Personal test clips: none supplied. The repo contains only a generated synthetic fixture (`public/media/synthetic-greeting.mp4`, made by `scripts/make-synthetic-fixture.py`).
-- Current blocker: the AR invisibility cause is not yet identified. The `&diag` readout on the S24 looked healthy (see isolation section), so the next step tests whether any WebGL geometry renders in AR at all. It affects both the synthetic fixture and Juan's MP4 (shared AR rendering path) and needs the S24 diagnostic readout. The preview requires Vercel sign-in.
-- Next concrete action: Juan tests the real greeting page **without `&diag`** using the synthetic clip (see "Real page vs passing probe"). As far as recorded, the current page has not been run on the S24 without `&diag` since the first fix commit (`9e14bfb`). If it works, his local MP4 is next. Devin makes no fix until this narrows the cause.
+- Current blocker: none known. Open risk: the invisibility cause was never identified, so it could return; if it does, the probe (`&probe&step=…`) and `&diag` readout remain as references. The preview requires Vercel sign-in.
+- Next concrete action: Juan runs remaining acceptance check 1 (see "Remaining G1 acceptance checks"); Devin guides one check at a time and records each result.
 
 ## Milestone tracking
 | Milestone | Code/status | Browser checks | Phone checks | PR / commit |
 | --- | --- | --- | --- | --- |
-| G1 video placement | In review; first phone test failed, fix attempt + diagnostics added | typecheck/build/`npm test` 12/12; headless CDP smoke 39/39 | **Failed** 2026-10-30: plays with sound in AR but no video visible; retest pending | PR #8 |
+| G1 video placement | In review; AR invisibility no longer reproduces (cause unknown); diagnostics and probe kept behind URL flags | typecheck/build/`npm test` 12/12; headless CDP smoke 68/68 (no WebXR) | First tests failed (no video in AR). Later on 2026-10-30: synthetic clip and local MP4 visible with sound in AR on the real page. Remaining acceptance checks pending | PR #8 |
 | G2 cutout/format proof | Not started | Not run | Not run | — |
 | G3 persistent creator app | Not started | Not run | Not run | — |
 | G4 automatic processing | Not started | Not run | Not run | — |
@@ -93,7 +93,18 @@ Update this file in every implementation PR and before pausing or switching tool
 - New migrations and whether applied: none.
 - Exact next assignment: superseded by the S24 failure section below (focused diagnostic retest, then the full checklist). G2 starts only when Juan assigns it.
 
-### G1 S24 checklist (Chrome, preview URL above)
+### Remaining G1 acceptance checks (real greeting page, S24, after the invisibility stopped reproducing)
+Already seen on the real page: synthetic clip and local MP4 visible and playing with sound after placement. Pause, Sound off, walk-around, Reset and Exit/re-enter were confirmed only on the probe (`step=hud`), so they are repeated here.
+1. Placement and walk-around: upright, bottom edge on the surface, stays fixed (does not turn to follow you).
+2. Play/Pause, Replay and Sound on/off in AR.
+3. Reset placement (stops, place again); Exit AR (pauses, preview returns); Enter AR and place again.
+4. Adjust appearance before AR: Video height and Bottom above surface match what you set.
+5. Loop on (repeats) and off (ends).
+6. Background Chrome and return: paused, no doubled audio, no black or frozen view.
+7. Optional chroma keying: synthetic clip with Background = Chroma key in AR; green removed, note halo.
+8. Particle regression on production: Neon Garden and Cosmic Vortex in AR. Also record the ARCore version.
+
+### Original G1 S24 checklist (Chrome, preview URL above)
 1. Choose a 10–15 s local MP4 (Choose local MP4): correct aspect, sound after tapping Play, Replay works.
 2. Prepared green-screen clip (or the synthetic test clip): with Background set to Chroma key, the green disappears in AR against the camera; adjust Tolerance and Edge softness; note any halo.
 3. Enter AR, scan a surface, tap to place: the greeting appears upright and starts with sound.
@@ -110,7 +121,9 @@ Observed by Juan on the S24 (Chrome): his own ordinary MP4 (original background,
 
 Follow-up from Juan: the included synthetic test clip fails the same way. Both clips play in the ordinary preview, and in AR both report "Placed" with audio but show no video. The failure is therefore in the shared AR rendering path, not in his file's codec, content or green-screen settings, and the investigation focuses there. Further code changes wait for the diagnostic results below (no more speculative fixes).
 
-Not reproducible here: the VM has no WebXR device, so headless checks can neither reproduce nor confirm a fix. The cause is not identified yet.
+Not reproducible here: the VM has no WebXR device, so headless checks can neither reproduce nor confirm a fix.
+
+**Outcome (2026-10-30):** the failure stopped reproducing on the real page (see the device log). The exact cause remains unknown. The code changes below, the probe and the diagnostics coincided with it stopping, but none was shown to be the fix; do not describe any of them as one.
 
 Code inspection of the AR rendering path:
 - Keying: in Opaque mode the shader always writes alpha 1 and never discards, so Opaque alone cannot make the plane invisible. Both clips ran with Chroma (the fixture config defaulted to it and a chosen local file kept it), but Chroma on the synthetic clip removes only the green and would still leave the figure visible, so keying does not explain an entirely invisible plane. The fixture and chosen local files now start in Opaque only to remove that variable.
@@ -202,7 +215,7 @@ Remaining differences:
 - Only with `&diag` (the only way the current page was run on the S24, because the retest link had `&diag`): the visible `PlacementMarkers` (magenta outline + cyan cube, `transparent`, `depthTest: false`, `renderOrder` 10, children of the same anchor), the readout inside the video HUD, and the Plane chip.
 - Always: the markers exist in the anchor but are hidden; `loop` is false from the config (the probe loops); keying uniforms come from the config (also Opaque, same values); two unused diagnostic materials; `isArSupported()` gates Enter AR; a `visibilitychange` pause; note/source HUD text; the `<video>` is appended after the HUD instead of before.
 No difference is a confirmed cause, so no fix was made. The first failure (before the `9e14bfb` changes: antialias, Opaque defaults, texture update from the loop, loop try/catch) and the `&diag` failure are different code; as far as recorded, the current page without `&diag` is untested on the phone.
-Next single test: real page, no `&diag`, synthetic clip. If it shows, the next test is the same page with `&diag` (to see whether diagnostics hide it), then the local MP4. If it fails, the always-present differences above go into the probe one at a time.
+Planned next test (done, see the device log: it passed, and so did `&diag` and the local MP4): real page, no `&diag`, synthetic clip. If it shows, the next test is the same page with `&diag` (to see whether diagnostics hide it), then the local MP4. If it fails, the always-present differences above go into the probe one at a time.
 
 ## Device evidence log
 | Date | Device / OS / browser | Feature and test | Result | Reporter / evidence |
@@ -220,7 +233,9 @@ Next single test: real page, no `&diag`, synthetic clip. If it shows, the next t
 | G1 2026-10-30 | S24 Ultra SM-S928U / Android 17 / Chrome 156.0.8078.73 | Probe ladder steps 2–5: plane, video-element, video-texture, video-shader (Opaque) | All four visible; video-element and later audible; renderErr 0, gl 0x0. PASS | Juan; four screenshots |
 | G1 2026-10-30 | Headless Chrome 137, no WebXR | Probe steps 6–10 placeholder / visibility / floor / layout / hud (preview path only) | 68/68 simulated pass; cannot test XR output | Devin, PR #8 |
 | G1 2026-10-30 | S24 Ultra SM-S928U / Android 17 / Chrome 156.0.8078.73 | Probe `step=hud` (10/10: all five video-page differences plus the full video HUD), synthetic clip | Video visible with sound; Pause, Sound off, walk-around, Reset + re-place, Exit AR + re-enter + re-place all work; renderErr 0, gl 0x0. PASS (probe only; not the real greeting page) | Juan; screenshot |
-| G1 2026-10-30 | S24 Ultra / Chrome 156 | Real greeting page without `&diag`, synthetic clip; then local MP4; Neon Garden particle recheck | Pending | Juan |
+| G1 2026-10-30 | S24 Ultra SM-S928U / Android 17 / Chrome 156.0.8078.73 | Real greeting page, synthetic clip, without and with `&diag` | Visible and playing after placement in both; `&diag` readout renderErr 0, gl 0x0, plane inView. PASS. Invisibility no longer reproduces; cause unknown | Juan; screenshot |
+| G1 2026-10-30 | S24 Ultra / Chrome 156 | Real greeting page (no `&diag`), Juan's local MP4 | Visible and playing with sound after placement. PASS | Juan; screenshot |
+| G1 2026-10-30 | S24 Ultra / Chrome 156 | Remaining G1 acceptance checks 1–8; ARCore version | Pending | Juan |
 
 Add video decode/format, audio start/middle/end, keying/matte edges, Reset/Exit/re-entry, QR signed-out launch and iPhone fallback rows as they are actually tested. Never carry historical particle success forward as proof that video works.
 

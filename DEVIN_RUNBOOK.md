@@ -1,5 +1,7 @@
 # Devin Build Prompts and Phone Test Runbook
 
+> **AR Greetings:** greeting development is governed by [`docs/greetings/02_MVP_SPEC.md`](docs/greetings/02_MVP_SPEC.md) and [`docs/greetings/03_BUILD_PLAN.md`](docs/greetings/03_BUILD_PLAN.md) (start at [`00_START_HERE.md`](docs/greetings/00_START_HERE.md)). This file remains the reference for preserving the existing particle experiences. Greetings use a separate `video` template; the config-only rule still applies to variations within an existing template.
+
 **For:** Juan Carlos Gallo  
 **Event:** Converge, Thursday October 15 2026  
 **All times:** Miami local time, Eastern  

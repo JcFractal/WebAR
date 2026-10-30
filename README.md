@@ -1,8 +1,16 @@
 # WebAR Voice Sculpture
 
-A small WebAR player that loads experiences from static JSON configs (`/?exp=<id>`). See [`SPEC.md`](SPEC.md) (authoritative scope) and [`DEVIN_RUNBOOK.md`](DEVIN_RUNBOOK.md) (milestones).
+A small WebAR player that loads experiences from static JSON configs (`/?exp=<id>`).
 
-**Status:** milestone 3 — shared particle swarm driven by the microphone (Live) or buttons (Manual). No camera or AR yet.
+**Documentation**
+
+- **AR Greetings (current direction):** start at [`docs/greetings/00_START_HERE.md`](docs/greetings/00_START_HERE.md), then [`01_CURRENT_STATE.md`](docs/greetings/01_CURRENT_STATE.md), [`02_MVP_SPEC.md`](docs/greetings/02_MVP_SPEC.md) (governs greeting work), [`03_BUILD_PLAN.md`](docs/greetings/03_BUILD_PLAN.md) and the living [`04_HANDOFF.md`](docs/greetings/04_HANDOFF.md).
+- **Particle experiences (historical event scope):** [`SPEC.md`](SPEC.md) and [`DEVIN_RUNBOOK.md`](DEVIN_RUNBOOK.md) still define Neon Garden and Cosmic Vortex and are the reference for preserving them.
+
+**Status (checked against the code):**
+
+- Particle demo (milestones 1–5 merged): gallery with links and QR codes; Neon Garden and Cosmic Vortex on one shared swarm engine; continuous voice control (Live) or buttons (Manual); Android WebXR AR placement with Reset and Exit. The milestone 6 reliability pass and the camera overlay mode were not done and are paused.
+- AR Greetings G1 (S24 phone test pending): a `video` template that plays a same-origin fixture or a locally selected MP4 on an upright plane, with optional chroma keying, size/bottom-offset/loop settings and placement through the same Android AR code. No uploads, accounts, background removal or shareable personal greetings yet; see the handoff.
 
 ## Voice input (milestone 3)
 
@@ -44,6 +52,7 @@ Requires Node 20.19+ (22 recommended, see `.nvmrc`).
 npm ci            # install exactly what the lockfile pins
 npm run dev       # dev server at http://localhost:5173
 npm run build     # type-check + production build into dist/
+npm test          # node:test checks for config validation and video helpers (tests/)
 npm run preview   # serve dist/ at http://localhost:4173
 ```
 
@@ -53,6 +62,8 @@ npm run preview   # serve dist/ at http://localhost:4173
 |---|---|
 | `/` | Gallery: one card per `public/manifest.json` entry with a link, a QR code, and a downloadable QR PNG |
 | `/?exp=neon-garden` | Neon Garden player |
+| `/?exp=cosmic-vortex` | Cosmic Vortex player |
+| `/?exp=greeting-test` | Video greeting test (G1): synthetic fixture clip plus a local-MP4 picker; listed under "Test fixtures" in the gallery |
 | `/?exp=<unknown or malformed>` | Error message with a link back to the gallery; never falls back to another experience |
 
 ## Adding an experience config
@@ -65,6 +76,20 @@ Validated fields: `id`, `template` (`swarm`), `title`, `settings.particleCount` 
 Optional `settings.swarm` tuning (defaults in `src/config.ts`): `pointSize` (0.002–0.05 m), `brightness` (0.1–3), `burstStrength` (0–1.5), `burstRecoverySeconds` (0.2–10), `releaseSeconds` (0.2–20), `maxPixelRatio` (0.5–3). `brand` is accepted for later milestones.
 
 Optional `settings.audio` (defaults in `AUDIO_DEFAULTS`, `src/config.ts`; starting points to tune on site): `gain` 1.4 (sensitivity, 0.1–10), `calibrationSeconds` 2, `speechCoherence` 0.2, `tonalThreshold` 0.5, `steadyHoldSeconds` 0.8, `gatherSeconds` 1.2, `quietSettleSeconds` 3, `quietDelaySeconds` 0.7, `burstCooldownSeconds` 1, `burstThresholdDb` 15, `burstMinEnergy` 0.45, `dynamicRangeDb` 48, `enterThreshold` 0.12, `exitThreshold` 0.06 (must be below enter), `steadyThreshold` 0.6. Unknown keys and out-of-range values are rejected.
+
+## Video greeting template (G1)
+
+`src/video/` is a separate template beside `src/swarm/`; it never creates a microphone stream.
+
+- `clip.ts` — `VideoClip`: one `<video>` + `THREE.VideoTexture`, playback states (`loading`, `ready`, `playing`, `paused`, `ended`, `blocked`, `error`), Retry, and `dispose()` that releases the element, listeners, texture and the local object URL together. Choosing another file disposes the previous clip.
+- `material.ts` — opaque or chroma-key shader (BT.601 Cb/Cr distance to the key color, `tolerance`, `softness` edge ramp, `spill` suppression). This is a controlled test path for green-screen clips, not automatic background removal.
+- `media.ts` — pure helpers (local-file checks, error wording, plane size, color math) covered by `npm test`.
+- `mount.ts` / `ui.ts` — one renderer and animation loop; the plane's bottom edge sits `bottomOffsetMeters` above the placed point and the whole frame is `displayHeightMeters` tall. Nothing is drawn until the first decoded frame. Play/Pause, Replay, Sound, Enter AR / Reset placement / Exit AR, Choose local MP4, and an Adjust appearance panel (height, bottom offset, loop, keying, preview background). Playback starts only from a tap (Play, Replay or the AR placement tap) so sound is allowed on mobile; searching for a surface pauses and rewinds, placing starts from the beginning, Exit pauses.
+- A locally chosen MP4 stays on the device as a temporary `blob:` URL. It is not uploaded, persisted or shareable, and the page says so.
+
+Video config fields (`template: "video"`): `settings.source` (`media/<name>.mp4`, same-origin only; required unless `settings.localFile` is true), `settings.sourceNote` (≤200 chars), `settings.displayHeightMeters` (0.25–2.5, default 1.2), `settings.bottomOffsetMeters` (0–2, default 0), `settings.loop` (default false), `settings.localFile` (show the local picker, default false), and `settings.keying` with `mode` (`opaque` | `chroma`, default opaque), `color` (`#RRGGBB`, default `#00b140`), `tolerance` (0–1), `softness` (0–0.5), `spill` (0–1). Manifest entries may set `"test": true` to list them under "Test fixtures" in the gallery.
+
+`public/media/synthetic-greeting.mp4` is a generated, clearly labeled synthetic clip (drawn figure on green, beeps for sync), made by `scripts/make-synthetic-fixture.py`. It is not personal footage and says nothing about real hair or edge quality.
 
 ## Vercel
 

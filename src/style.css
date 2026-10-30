@@ -193,3 +193,5 @@ html.ar-active .stage, html.ar-active .fps { visibility: hidden; }
 .tune-panel .hud-chip { pointer-events: auto; font: inherit; color: var(--fg); cursor: pointer; }
 .gallery-section { margin: 2rem 0 0.75rem; font-size: 1rem; color: var(--muted); }
 .test-badge { font-size: 0.75rem; color: #ffb347; }
+.diag-readout { position: absolute; top: 3.5rem; left: 0.5rem; right: 0.5rem; z-index: 5; margin: 0; padding: 0.4rem 0.5rem; font: 11px/1.35 ui-monospace, monospace; color: #7dffd8; background: #000000b3; border-radius: 0.4rem; white-space: pre-wrap; word-break: break-all; pointer-events: none; }
+.diag-readout[hidden] { display: none; }

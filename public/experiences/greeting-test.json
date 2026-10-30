@@ -9,6 +9,6 @@
     "bottomOffsetMeters": 0,
     "loop": false,
     "localFile": true,
-    "keying": { "mode": "chroma", "color": "#00b140", "tolerance": 0.25, "softness": 0.1, "spill": 0.5 }
+    "keying": { "mode": "opaque", "color": "#00b140", "tolerance": 0.25, "softness": 0.1, "spill": 0.5 }
   }
 }

@@ -3,6 +3,7 @@ import { KEYING_DEFAULTS, VIDEO_DEFAULTS, type VideoExperienceConfig } from '../
 import { ArPlacement, isArSupported, type ArState } from '../xr/ar';
 import { VideoClip, liveObjectUrlCount } from './clip';
 import { applyKeying, createVideoMaterial } from './material';
+import { PLANE_MODES, PLANE_MODE_LABELS, PlacementMarkers, type PlaneMaterialMode } from './diagnostics';
 import { checkLocalFile, durationNote, planeSize, rgbToHex } from './media';
 import { createVideoHud, type VideoTune } from './ui';
 
@@ -29,8 +30,11 @@ export function mountVideo(container: HTMLElement, config: VideoExperienceConfig
     background: 'dark',
   };
   const allowLocal = s.localFile ?? VIDEO_DEFAULTS.localFile;
+  const params = new URLSearchParams(window.location.search);
+  const diag = params.has('diag');
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+  // Same context settings as the swarm template, whose AR rendering is verified on the S24.
+  const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
   renderer.setClearColor(BACKGROUNDS.dark, 1);
   renderer.domElement.className = 'stage';
   container.prepend(renderer.domElement);
@@ -46,15 +50,24 @@ export function mountVideo(container: HTMLElement, config: VideoExperienceConfig
   scene.add(anchor);
   const placeholder = new THREE.Texture();
   const material = createVideoMaterial(placeholder, tune);
-  const plane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);
+  const plane = new THREE.Mesh<THREE.PlaneGeometry, THREE.Material>(new THREE.PlaneGeometry(1, 1), material);
   plane.visible = false;
   anchor.add(plane);
+  const markers = new PlacementMarkers(anchor);
+  markers.setVisible(diag);
+  const basicMaterial = new THREE.MeshBasicMaterial({ map: placeholder, side: THREE.DoubleSide, toneMapped: false });
+  const solidMaterial = new THREE.MeshBasicMaterial({ color: 0xff00ff, side: THREE.DoubleSide });
+  let planeMode: PlaneMaterialMode = 'shader';
+  const applyPlaneMode = () => {
+    plane.material = planeMode === 'shader' ? material : planeMode === 'basic' ? basicMaterial : solidMaterial;
+  };
   const ar = new ArPlacement(renderer, scene, anchor, container, 0, { noun: 'greeting', fallback: 'normal video preview' });
 
   let soundOn = true;
   let clip: VideoClip | null = null;
   let arSupported = false;
   let localError = '';
+  let lastVideoTime = -1;
 
   const layout = () => {
     const aspect = clip?.aspect ?? 9 / 16;
@@ -111,7 +124,10 @@ export function mountVideo(container: HTMLElement, config: VideoExperienceConfig
   const setClip = (source: string | File) => {
     clip?.dispose();
     clip = new VideoClip(container, source, tune.loop);
+    lastVideoTime = -1;
     material.uniforms.map.value = clip.texture;
+    basicMaterial.map = clip.texture;
+    basicMaterial.needsUpdate = true;
     clip.onChange = () => {
       layout();
       refresh();
@@ -127,7 +143,7 @@ export function mountVideo(container: HTMLElement, config: VideoExperienceConfig
     else void clip.play(soundOn);
   };
 
-  const hud = createVideoHud(container, tune, allowLocal, {
+  const hud = createVideoHud(container, tune, allowLocal, diag, {
     playPause,
     replay: () => {
       if (!clip || (ar.active && ar.state !== 'placed')) return;
@@ -156,6 +172,11 @@ export function mountVideo(container: HTMLElement, config: VideoExperienceConfig
         return;
       }
       localError = '';
+      if (tune.mode !== 'opaque') {
+        tune.mode = 'opaque';
+        hud.setTune('mode', tune.mode);
+        applyKeying(material, tune);
+      }
       setClip(file);
     },
     useFixture: () => {
@@ -184,6 +205,10 @@ export function mountVideo(container: HTMLElement, config: VideoExperienceConfig
       else if (key === 'background') renderer.setClearColor(BACKGROUNDS[tune.background], 1);
       else if (key === 'displayHeightMeters' || key === 'bottomOffsetMeters') layout();
       else applyKeying(material, tune);
+    },
+    cyclePlaneMaterial: () => {
+      planeMode = PLANE_MODES[(PLANE_MODES.indexOf(planeMode) + 1) % PLANE_MODES.length];
+      applyPlaneMode();
     },
   });
 
@@ -222,15 +247,74 @@ export function mountVideo(container: HTMLElement, config: VideoExperienceConfig
   layout();
   refresh();
 
-  let frames = 0;
-  renderer.setAnimationLoop((_time, frame) => {
-    frames++;
-    ar.update(frame);
-    plane.visible = !!clip?.frameReady && clip.state !== 'error';
-    renderer.render(scene, camera);
-  });
+  const gl = renderer.getContext();
+  const stats = { frames: 0, xrFrames: 0, renderErrors: 0, lastError: '', glError: 0 };
+  const v1 = new THREE.Vector3();
+  const v2 = new THREE.Vector3();
+  const v3 = new THREE.Vector3();
+  const frustum = new THREE.Frustum();
+  const viewProj = new THREE.Matrix4();
+  const f2 = (v: THREE.Vector3) => `${v.x.toFixed(2)},${v.y.toFixed(2)},${v.z.toFixed(2)}`;
+  const report = (): string => {
+    const xr = renderer.xr.isPresenting;
+    const xrCam = renderer.xr.getCamera();
+    const view = xr ? (xrCam.cameras[0] ?? xrCam) : camera;
+    view.getWorldPosition(v1);
+    anchor.getWorldPosition(v2);
+    plane.getWorldPosition(v3);
+    viewProj.multiplyMatrices(view.projectionMatrix, view.matrixWorldInverse);
+    frustum.setFromProjectionMatrix(viewProj);
+    plane.updateWorldMatrix(true, false);
+    const v = clip?.video;
+    const layer = xr ? renderer.xr.getBaseLayer() : null;
+    return [
+      `xr ${xr ? 'on' : 'off'} ar=${ar.state} blend=${xr ? renderer.xr.getEnvironmentBlendMode() : '-'} layer=${layer ? layer.constructor.name : '-'}`,
+      `frames ${stats.frames} xrFrames ${stats.xrFrames} renderErr ${stats.renderErrors} gl 0x${stats.glError.toString(16)}`,
+      `anchor vis=${anchor.visible} @${f2(v2)}`,
+      `camera @${f2(v1)} dist ${v1.distanceTo(v3).toFixed(2)} m`,
+      `plane vis=${plane.visible} ${plane.scale.x.toFixed(2)}x${plane.scale.y.toFixed(2)} @${f2(v3)} inView=${frustum.intersectsObject(plane)}`,
+      `video rs=${v?.readyState ?? '-'} ${v?.videoWidth ?? 0}x${v?.videoHeight ?? 0} t=${v?.currentTime.toFixed(2) ?? '-'} paused=${v?.paused ?? '-'}`,
+      `texture version ${clip?.texture.version ?? 0} frameReady=${!!clip?.frameReady} state=${clip?.state ?? 'none'}`,
+      `keying ${tune.mode} plane=${planeMode}`,
+      stats.lastError ? `error: ${stats.lastError}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+  };
 
-  const debug = new URLSearchParams(window.location.search).has('debug');
+  let lastReport = 0;
+  renderer.setAnimationLoop((time, frame) => {
+    stats.frames++;
+    if (frame) stats.xrFrames++;
+    try {
+      ar.update(frame);
+      // Upload decoded frames from the render loop: requestVideoFrameCallback (used by
+      // VideoTexture) is tied to window rendering, which may not run during an immersive session.
+      const v = clip?.video;
+      if (clip?.frameReady && v && v.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && v.currentTime !== lastVideoTime) {
+        lastVideoTime = v.currentTime;
+        clip.texture.needsUpdate = true;
+      }
+      plane.visible = planeMode === 'solid' || (!!clip?.frameReady && clip.state !== 'error');
+      markers.follow(plane);
+      renderer.render(scene, camera);
+      if (diag) {
+        const e = gl.getError();
+        if (e) stats.glError = e;
+      }
+    } catch (err) {
+      // Keep the loop alive (an exception here would stop all later XR frames).
+      stats.renderErrors++;
+      stats.lastError = (err as Error)?.message ?? String(err);
+    }
+    if (diag && time - lastReport > 250) {
+      lastReport = time;
+      hud.setDiagnostics(report(), PLANE_MODE_LABELS[planeMode]);
+    }
+  });
+  if (diag) hud.setDiagnostics(report(), PLANE_MODE_LABELS[planeMode]);
+
+  const debug = params.has('debug');
   if (debug) {
     (window as unknown as Record<string, unknown>).__webar = {
       clip: () => clip,
@@ -239,7 +323,9 @@ export function mountVideo(container: HTMLElement, config: VideoExperienceConfig
       planeVisible: () => plane.visible,
       planeSize: () => ({ width: plane.scale.x, height: plane.scale.y, centerY: plane.position.y }),
       tune,
-      frames: () => frames,
+      frames: () => stats.frames,
+      planeMode: () => planeMode,
+      report,
       videos: () => document.querySelectorAll('video').length,
       canvases: () => document.querySelectorAll('canvas').length,
       objectUrls: liveObjectUrlCount,
@@ -260,8 +346,11 @@ export function mountVideo(container: HTMLElement, config: VideoExperienceConfig
     hud.dispose();
     anchor.remove(plane);
     scene.remove(anchor, floor);
+    markers.dispose();
     plane.geometry.dispose();
     material.dispose();
+    basicMaterial.dispose();
+    solidMaterial.dispose();
     placeholder.dispose();
     floor.dispose();
     renderer.dispose();

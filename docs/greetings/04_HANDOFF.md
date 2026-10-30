@@ -1,11 +1,11 @@
 # AR Greetings — living handoff
-Last updated: October 30, 2026 (G1 implementation, Devin)
+Last updated: October 30, 2026 (G1 S24 failure, AR diagnostics, Devin)
 Update this file in every implementation PR and before pausing or switching tools.
 
 ## Current status
-- Stage: G1 code complete and in review; S24 phone test pending. G2 not started (do not start until Juan reports the G1 phone results and assigns G2).
+- Stage: G1 **failed** its first S24 test (no video visible after AR placement; details below). A fix attempt plus temporary AR diagnostics are on PR #8; S24 retest pending. G2 not started and paused (do not start until G1 passes and Juan assigns G2).
 - Active agent: Devin (G1). Stopped before G2.
-- Current authorized next assignment: Juan's S24 test of G1 (checklist below), then G2 only if he assigns it.
+- Current authorized next assignment: Juan's focused S24 retest (diagnostic test below), then fix G1 on PR #8 as needed. G2 only if he assigns it.
 - Repository: https://github.com/JcFractal/WebAR
 - Observed baseline main: accf90a1b6b968001edfbfb8e71314b994bacdd7.
 - Greeting branch / commit / PR: `devin/g1-video-placement`; G1 code commit a1fd865ea68f7e449f6c0a7265a42f760f6514b5 plus a later handoff-only commit (check the branch tip); PR https://github.com/JcFractal/WebAR/pull/8 (open, not merged).
@@ -15,13 +15,13 @@ Update this file in every implementation PR and before pausing or switching tool
 - Processing provider and media format: undecided; G2 owns the decision.
 - Credentials: none supplied or created in this planning task.
 - Personal test clips: none supplied. The repo contains only a generated synthetic fixture (`public/media/synthetic-greeting.mp4`, made by `scripts/make-synthetic-fixture.py`).
-- Current blocker: real video AR, audio and keying quality need Juan's S24 test; the preview requires Vercel sign-in.
-- Next concrete action: Juan runs the G1 S24 checklist below on the preview and reports results; Devin fixes any G1 defects on the same PR.
+- Current blocker: the AR invisibility cause is not yet identified; it needs the S24 diagnostic readout. The preview requires Vercel sign-in.
+- Next concrete action: Juan runs the focused diagnostic retest below and sends screenshots of the readout; Devin fixes the identified cause on PR #8.
 
 ## Milestone tracking
 | Milestone | Code/status | Browser checks | Phone checks | PR / commit |
 | --- | --- | --- | --- | --- |
-| G1 video placement | Code complete, in review | typecheck/build/`npm test` 12/12; headless CDP smoke 30/30 | Pending (Juan, S24) | PR #8, a1fd865 |
+| G1 video placement | In review; first phone test failed, fix attempt + diagnostics added | typecheck/build/`npm test` 12/12; headless CDP smoke 39/39 | **Failed** 2026-10-30: plays with sound in AR but no video visible; retest pending | PR #8 |
 | G2 cutout/format proof | Not started | Not run | Not run | — |
 | G3 persistent creator app | Not started | Not run | Not run | — |
 | G4 automatic processing | Not started | Not run | Not run | — |
@@ -91,7 +91,7 @@ Update this file in every implementation PR and before pausing or switching tool
   - Gallery QR for `greeting-test` points at production, which only works after merge.
 - Relevant config variable names and setup location (never values): `VITE_PUBLIC_BASE_URL` (optional, build time; existing). No secrets.
 - New migrations and whether applied: none.
-- Exact next assignment: Juan runs the G1 S24 checklist below and reports the results. Devin fixes G1 defects on PR #8. G2 starts only when Juan assigns it.
+- Exact next assignment: superseded by the S24 failure section below (focused diagnostic retest, then the full checklist). G2 starts only when Juan assigns it.
 
 ### G1 S24 checklist (Chrome, preview URL above)
 1. Choose a 10–15 s local MP4 (Choose local MP4): correct aspect, sound after tapping Play, Replay works.
@@ -105,12 +105,40 @@ Update this file in every implementation PR and before pausing or switching tool
 9. Background Chrome and return: no duplicate audio, no stale or black canvas; playback paused.
 10. Reopen Neon Garden and Cosmic Vortex (production links) and confirm they still work.
 
+## G1 S24 failure and AR rendering investigation (2026-10-30)
+Observed by Juan on the S24 (Chrome): his own ordinary MP4 (original background, no green screen) displays and plays with sound in the normal preview. Enter AR opens the camera; after scanning and tapping, the UI says "Placed" and playback/audio run, but no video is visible.
+
+Not reproducible here: the VM has no WebXR device, so headless checks can neither reproduce nor confirm a fix. The cause is not identified yet.
+
+Code inspection of the AR rendering path:
+- Keying: in Opaque mode the shader always writes alpha 1 and never discards, so Opaque alone cannot make the plane invisible. But the fixture config defaulted to Chroma and a chosen local file kept that mode, so Juan's test ran with Chroma. Now the fixture defaults to Opaque and choosing a local MP4 switches keying to Opaque.
+- Renderer: the video template created its WebGL context with `antialias: true`; the swarm template, whose AR is verified on the S24, uses `antialias: false`. It now matches the swarm (the XR layer inherits this setting).
+- Texture updates: three r185 `VideoTexture` uploads new frames only from `requestVideoFrameCallback`, which is tied to window rendering and may not fire during an immersive session. That would freeze the picture rather than hide it, but the render loop now flags `needsUpdate` whenever `currentTime` advances.
+- Loop failure: three requests the next XR frame only after the animation callback returns, so any exception in the callback (for example on the first frame the plane is drawn) would stop all later XR rendering while audio continues. The callback now catches errors, keeps the loop alive and reports them.
+- Transforms/frustum/first frame: placement uses the unchanged `ArPlacement`. The plane is a child of the anchor at y = offset + height/2, 0.68 × 1.2 m by default, double-sided, frustum-culled by its bounding sphere. It is hidden until `frameReady` (`loadeddata`), which was already true from the preview.
+
+Temporary diagnostics (only with `&diag` in the URL; remove or keep behind the flag once G1 passes):
+- Magenta outline around the plane rectangle and a cyan cube at the anchor origin. Both are children of the same anchor, drawn without depth test and independent of the video texture, shader and first-frame gate.
+- "Plane:" button cycling the plane material: keying shader → plain video material (`MeshBasicMaterial`, bypasses the custom shader) → solid magenta (no video, shown even without a frame).
+- On-screen readout (4×/s): XR on/off, AR state, blend mode, XR layer type; frame and XR-frame counters, caught render errors, last WebGL error; anchor visibility/position; camera position and distance; plane visibility, size, position and in-view test; video readyState, size, time and paused state; texture version, frameReady and clip state; keying mode and plane material; last error text.
+
+How to read the result: outline/cube visible but no video → texture or shader problem (then check whether "plain video material" shows it). Nothing visible and the xrFrames counter stops → the render loop is dying (error line names it). Nothing visible with counters running → placement/transform/frustum (check distance, positions, inView). If the plane now shows normally, the antialias/texture changes fixed it.
+
+### Focused S24 retest (diagnostic)
+Open https://web-ar-git-devin-g1-video-placement-jc-fractal-studios.vercel.app/?exp=greeting-test&diag (signed in to Vercel).
+1. Choose your local MP4 (keying should switch to Opaque), Play once, then Enter AR, scan and tap to place. Take a screenshot showing the readout and the scene.
+2. Is the video visible? Is the magenta outline / cyan cube visible? Wait 2 s and screenshot again (do the frame counters advance?).
+3. Tap "Plane:" once (plain video material) and screenshot, then once more (solid magenta) and screenshot.
+4. If the video is visible: run checklist items 3–9 below, then 2 (Chroma with the test clip) and 10.
+
 ## Device evidence log
 | Date | Device / OS / browser | Feature and test | Result | Reporter / evidence |
 | --- | --- | --- | --- | --- |
 | Historical hackathon | S24 Ultra / versions unrecorded / Chrome | Neon Garden placement, walk-around, mic and Reset | User reported working | Juan; supplied conversation |
 | Planning 2026-10-29 | No device | No new physical tests | Not tested | Planning session |
 | G1 2026-10-30 | Headless Chrome 137 (cloud VM), no WebXR | G1 playback, keying, local-file lifecycle, regressions | 30/30 simulated pass; not device evidence | Devin, PR #8 |
+| G1 2026-10-30 | S24 Ultra / Chrome (versions unrecorded) | Juan's own ordinary MP4 (no green screen), preview then AR | Normal preview: displays and plays with sound. AR: camera opens, scan + tap shows "Placed", playback/audio runs, **no video visible**. FAIL | Juan; two screenshots |
+| G1 2026-10-30 | Headless Chrome 137, no WebXR | `&diag` readout, Plane material cycle, Opaque defaults, loop kept alive | 39/39 simulated pass; does not reproduce or resolve the phone failure | Devin, PR #8 |
 
 Add video decode/format, audio start/middle/end, keying/matte edges, Reset/Exit/re-entry, QR signed-out launch and iPhone fallback rows as they are actually tested. Never carry historical particle success forward as proof that video works.
 

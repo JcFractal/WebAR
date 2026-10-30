@@ -27,6 +27,7 @@ export interface VideoHudHandlers {
   useFixture(): void;
   sampleKey(): void;
   tune<K extends keyof VideoTune>(key: K, value: VideoTune[K]): void;
+  cyclePlaneMaterial(): void;
 }
 
 export interface VideoHud {
@@ -37,6 +38,8 @@ export interface VideoHud {
   setArUnavailable(message: string): void;
   setSource(local: boolean, canUseFixture: boolean): void;
   setTune<K extends keyof VideoTune>(key: K, value: VideoTune[K]): void;
+  /** Only present with `&diag`. */
+  setDiagnostics(text: string, planeLabel: string): void;
   dispose(): void;
 }
 
@@ -55,7 +58,7 @@ function button(label: string, className = 'hud-chip'): HTMLButtonElement {
 
 const KEY_LABELS: Record<KeyMode, string> = { opaque: 'Opaque (no keying)', chroma: 'Chroma key' };
 
-export function createVideoHud(container: HTMLElement, initial: VideoTune, allowLocal: boolean, h: VideoHudHandlers): VideoHud {
+export function createVideoHud(container: HTMLElement, initial: VideoTune, allowLocal: boolean, diag: boolean, h: VideoHudHandlers): VideoHud {
   const hud = el('div', 'hud');
 
   const statusRow = el('div', 'hud-row hud-hint-row');
@@ -109,7 +112,12 @@ export function createVideoHud(container: HTMLElement, initial: VideoTune, allow
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
     else void container.requestFullscreen?.().catch(() => undefined);
   });
-  secondary.append(enterAr, resetAr, exitAr, choose, fixture, adjustToggle, fullscreen, fileInput);
+  const planeChip = button('Plane');
+  planeChip.hidden = !diag;
+  planeChip.addEventListener('click', () => h.cyclePlaneMaterial());
+  secondary.append(enterAr, resetAr, exitAr, choose, fixture, adjustToggle, fullscreen, planeChip, fileInput);
+  const readout = el('pre', 'diag-readout');
+  readout.hidden = !diag;
 
   const note = el('p', 'hud-hint video-note');
   note.hidden = true;
@@ -199,7 +207,7 @@ export function createVideoHud(container: HTMLElement, initial: VideoTune, allow
   panel.append(el('p', 'panel-heading', 'Preview'));
   addSelect('background', 'Preview background', [['dark', 'Dark'], ['light', 'Light']]);
 
-  container.append(hud, panel);
+  container.append(readout, hud, panel);
 
   return {
     setTransport(state, soundOn) {
@@ -242,7 +250,12 @@ export function createVideoHud(container: HTMLElement, initial: VideoTune, allow
     setTune(key, value) {
       (setters[key] as ((v: VideoTune[typeof key]) => void) | undefined)?.(value);
     },
+    setDiagnostics(text, planeLabel) {
+      readout.textContent = text;
+      planeChip.textContent = `Plane: ${planeLabel}`;
+    },
     dispose() {
+      readout.remove();
       hud.remove();
       panel.remove();
     },

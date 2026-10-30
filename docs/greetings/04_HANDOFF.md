@@ -16,7 +16,7 @@ Update this file in every implementation PR and before pausing or switching tool
 - Credentials: none supplied or created in this planning task.
 - Personal test clips: none supplied. The repo contains only a generated synthetic fixture (`public/media/synthetic-greeting.mp4`, made by `scripts/make-synthetic-fixture.py`).
 - Current blocker: none known. Open risk: the invisibility cause was never identified, so it could return; if it does, the probe (`&probe&step=…`) and `&diag` readout remain as references. The preview requires Vercel sign-in.
-- Next concrete action: checks 1–4 passed; Juan runs remaining acceptance check 5 (see "Remaining G1 acceptance checks"); Devin guides one check at a time and records each result.
+- Next concrete action: checks 1–5 passed; Juan runs remaining acceptance check 6 (see "Remaining G1 acceptance checks"); Devin guides one check at a time and records each result.
 
 ## Milestone tracking
 | Milestone | Code/status | Browser checks | Phone checks | PR / commit |
@@ -239,7 +239,8 @@ Planned next test (done, see the device log: it passed, and so did `&diag` and t
 | G1 2026-10-30 | S24 Ultra / Chrome 156 | Acceptance check 2, real page (no `&diag`), synthetic clip: Play/Pause, Sound on/off, Replay, end of clip in AR | PASS | Juan |
 | G1 2026-10-30 | S24 Ultra / Chrome 156 | Acceptance check 3, real page (no `&diag`), synthetic clip: Reset placement, Exit AR, Enter AR and place again | PASS | Juan |
 | G1 2026-10-30 | S24 Ultra / Chrome 156 | Acceptance check 4, real page (no `&diag`), synthetic clip: Video height ≈0.6 m and Bottom above surface ≈0.3 m set before AR | Size and bottom-edge gap matched the settings. PASS | Juan |
-| G1 2026-10-30 | S24 Ultra / Chrome 156 | Remaining G1 acceptance checks 5–8; ARCore version | Pending | Juan |
+| G1 2026-10-30 | S24 Ultra / Chrome 156 | Acceptance check 5, real page (no `&diag`), synthetic clip: Loop on (repeats) and off (ends with "Finished") in AR | PASS | Juan |
+| G1 2026-10-30 | S24 Ultra / Chrome 156 | Remaining G1 acceptance checks 6–8; ARCore version | Pending | Juan |
 
 Add video decode/format, audio start/middle/end, keying/matte edges, Reset/Exit/re-entry, QR signed-out launch and iPhone fallback rows as they are actually tested. Never carry historical particle success forward as proof that video works.
 

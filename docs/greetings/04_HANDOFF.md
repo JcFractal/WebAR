@@ -1,5 +1,5 @@
 # AR Greetings — living handoff
-Last updated: October 30, 2026 (G1 S24 probe ladder passed; full-page difference ladder, Devin)
+Last updated: October 30, 2026 (G1 S24 probe step=hud passed; real-page comparison, Devin)
 Update this file in every implementation PR and before pausing or switching tools.
 
 ## Current status
@@ -16,7 +16,7 @@ Update this file in every implementation PR and before pausing or switching tool
 - Credentials: none supplied or created in this planning task.
 - Personal test clips: none supplied. The repo contains only a generated synthetic fixture (`public/media/synthetic-greeting.mp4`, made by `scripts/make-synthetic-fixture.py`).
 - Current blocker: the AR invisibility cause is not yet identified. The `&diag` readout on the S24 looked healthy (see isolation section), so the next step tests whether any WebGL geometry renders in AR at all. It affects both the synthetic fixture and Juan's MP4 (shared AR rendering path) and needs the S24 diagnostic readout. The preview requires Vercel sign-in.
-- Next concrete action: Juan runs one S24 test, `&probe&step=hud` (all five differences together); the result decides the next single test (see "Full-page difference ladder"). Devin makes no fix until the first failing difference is known.
+- Next concrete action: Juan tests the real greeting page **without `&diag`** using the synthetic clip (see "Real page vs passing probe"). The current page has not been run on the S24 without `&diag` since the first fix commit. If it works, his local MP4 is next. Devin makes no fix until this narrows the cause.
 
 ## Milestone tracking
 | Milestone | Code/status | Browser checks | Phone checks | PR / commit |
@@ -184,6 +184,7 @@ Confirmed (Juan, four screenshots), each with the default XR setup:
 So the `<video>` element, VideoTexture updates and the custom shader each render in AR on this phone. The failure comes from something only the full video page (`src/video/mount.ts`) does.
 
 ### Full-page difference ladder (steps 6–10)
+Result: `step=hud` (all of steps 6–10) **passed** on the S24 (see the device log), so none of these differences alone or together reproduces the failure. Steps 7–9 were not run separately because 10 includes them.
 Control: `step=video-shader` (passed). Each step adds one difference copied from `mountVideo`, cumulatively:
 6. `placeholder`: material created with an empty `THREE.Texture` placeholder, clip texture swapped into the uniform afterwards (as `setClip`).
 7. `visibility`: plane starts hidden; `plane.visible = frameReady && state !== 'error'` every frame (video page rule).
@@ -194,6 +195,14 @@ Not covered by the ladder: diagnostic markers (only with `&diag`; the failure pr
 
 Test order, one S24 test per round (bisection over the cumulative steps):
 - First: `step=hud`. If it **passes**, the ladder does not reproduce the failure; the cause is outside it (for example element order in `mountVideo`, user actions like Fullscreen, or something not yet copied), and the next test compares the real page against `step=hud`. If it **fails**, test `step=visibility`; then `placeholder` or `layout`/`floor` to pin the first failing step.
+
+### Real page vs passing probe (`step=hud`)
+Static comparison of `src/video/mount.ts` against `src/xr/probe.ts` at `step=hud`. Same in both: renderer and XR setup, overlay root, `ArPlacement`, `VideoClip`, placeholder swap, keying shader (Opaque), first-frame visibility rule, GridHelper floor, `layout()`, the full HUD and `beforexrselect` rule, the loop's texture update and try/catch.
+Remaining differences:
+- Only with `&diag` (the only way the current page was run on the S24, because the retest link had `&diag`): the visible `PlacementMarkers` (magenta outline + cyan cube, `transparent`, `depthTest: false`, `renderOrder` 10, children of the same anchor), the readout inside the video HUD, and the Plane chip.
+- Always: the markers exist in the anchor but are hidden; `loop` is false from the config (the probe loops); keying uniforms come from the config (also Opaque, same values); two unused diagnostic materials; `isArSupported()` gates Enter AR; a `visibilitychange` pause; note/source HUD text; the `<video>` is appended after the HUD instead of before.
+No difference is a confirmed cause, so no fix was made. The first failure (before the `9e14bfb` changes: antialias, Opaque defaults, texture update from the loop, loop try/catch) and the `&diag` failure are different code; the current page without `&diag` is untested on the phone.
+Next single test: real page, no `&diag`, synthetic clip. If it shows, the next test is the same page with `&diag` (to see whether diagnostics hide it), then the local MP4. If it fails, the always-present differences above go into the probe one at a time.
 
 ## Device evidence log
 | Date | Device / OS / browser | Feature and test | Result | Reporter / evidence |
@@ -210,7 +219,8 @@ Test order, one S24 test per round (bisection over the cumulative steps):
 | G1 2026-10-30 | Headless Chrome 137, no WebXR | Probe ladder steps plane / video-element / video-texture / video-shader (preview path only) | 57/57 simulated pass; cannot test XR output | Devin, PR #8 |
 | G1 2026-10-30 | S24 Ultra SM-S928U / Android 17 / Chrome 156.0.8078.73 | Probe ladder steps 2–5: plane, video-element, video-texture, video-shader (Opaque) | All four visible; video-element and later audible; renderErr 0, gl 0x0. PASS | Juan; four screenshots |
 | G1 2026-10-30 | Headless Chrome 137, no WebXR | Probe steps 6–10 placeholder / visibility / floor / layout / hud (preview path only) | 68/68 simulated pass; cannot test XR output | Devin, PR #8 |
-| G1 2026-10-30 | S24 Ultra / Chrome 156 | Probe `step=hud`; Neon Garden particle recheck | Pending | Juan |
+| G1 2026-10-30 | S24 Ultra SM-S928U / Android 17 / Chrome 156.0.8078.73 | Probe `step=hud` (10/10: all five video-page differences plus the full video HUD), synthetic clip | Video visible with sound; Pause, Sound off, walk-around, Reset + re-place, Exit AR + re-enter + re-place all work; renderErr 0, gl 0x0. PASS (probe only; not the real greeting page) | Juan; screenshot |
+| G1 2026-10-30 | S24 Ultra / Chrome 156 | Real greeting page without `&diag`, synthetic clip; then local MP4; Neon Garden particle recheck | Pending | Juan |
 
 Add video decode/format, audio start/middle/end, keying/matte edges, Reset/Exit/re-entry, QR signed-out launch and iPhone fallback rows as they are actually tested. Never carry historical particle success forward as proof that video works.
 

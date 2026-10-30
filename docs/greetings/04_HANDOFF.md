@@ -5,7 +5,7 @@ Update this file in every implementation PR and before pausing or switching tool
 ## Current status
 - Stage: G1 **failed** its first S24 test (no video visible after AR placement; details below). A fix attempt plus temporary AR diagnostics are on PR #8; S24 retest pending. G2 not started and paused (do not start until G1 passes and Juan assigns G2).
 - Active agent: Devin (G1). Stopped before G2.
-- Current authorized next assignment: Juan's controlled S24 isolation tests (probe pages below, one variable each), then fix G1 on PR #8 once the cause is narrowed. G2 only if he assigns it.
+- Current authorized next assignment: Juan runs the probe ladder (cube passed; plane → video element → video texture → video shader, one change each) to find the first step that fails; then fix G1 on PR #8. G2 only if he assigns it.
 - Repository: https://github.com/JcFractal/WebAR
 - Observed baseline main: accf90a1b6b968001edfbfb8e71314b994bacdd7.
 - Greeting branch / commit / PR: `devin/g1-video-placement`; G1 code commit a1fd865ea68f7e449f6c0a7265a42f760f6514b5 plus a later handoff-only commit (check the branch tip); PR https://github.com/JcFractal/WebAR/pull/8 (open, not merged).
@@ -16,7 +16,7 @@ Update this file in every implementation PR and before pausing or switching tool
 - Credentials: none supplied or created in this planning task.
 - Personal test clips: none supplied. The repo contains only a generated synthetic fixture (`public/media/synthetic-greeting.mp4`, made by `scripts/make-synthetic-fixture.py`).
 - Current blocker: the AR invisibility cause is not yet identified. The `&diag` readout on the S24 looked healthy (see isolation section), so the next step tests whether any WebGL geometry renders in AR at all. It affects both the synthetic fixture and Juan's MP4 (shared AR rendering path) and needs the S24 diagnostic readout. The preview requires Vercel sign-in.
-- Next concrete action: Juan runs the five-page S24 isolation test below and sends screenshots; Devin makes no further fix until those results narrow the cause.
+- Next concrete action: Juan runs the probe ladder below and reports the first failing step; Devin makes no further fix until then.
 
 ## Milestone tracking
 | Milestone | Code/status | Browser checks | Phone checks | PR / commit |
@@ -156,6 +156,25 @@ All on https://web-ar-git-devin-g1-video-placement-jc-fractal-studios.vercel.app
 5. Particle recheck, same phone/browser: https://web-ar-gold.vercel.app/?exp=neon-garden , Enter AR, place, are particles visible? (Cosmic Vortex too if practical.)
 If a probe variant shows the cube where 1 does not, open the video page with the same flag, e.g. `/?exp=greeting-test&diag&layer=legacy`.
 
+### Baseline probe PASSED on the S24; probe ladder (2026-10-30, third round)
+Confirmed (Juan, screenshot): `?exp=greeting-test&probe`, flags none, `XRProjectionLayer` (renderState layers=1, baseLayer=no), blend alpha-blend, domOverlay screen, features local,viewer,hit-test,dom-overlay, canvas `inOverlayRoot=true visibility=hidden`, renderErr 0, gl 0x0. The reticle appeared, the cube was placed and visibly rendered, and he walked around it. So basic XR geometry renders with the existing layer, DOM overlay root and `.stage` CSS. H1–H4 are not the cause for plain geometry; the overlay/stage/legacy-layer variants were not needed and stay unused. The cause is in a difference introduced by the video template.
+
+The ladder keeps the passing probe's XR setup constant (same renderer settings, overlay root, layer, ArPlacement, CSS) and adds one change per step (`&probe&step=<name>`):
+1. `cube`: passed.
+2. `plane`: untextured magenta upright plane (MeshBasicMaterial, double-sided) at the video plane's size and position (0.675 × 1.2 m, bottom edge on the surface).
+3. `video-element`: as step 2, plus a playing `<video>` of the synthetic clip created by the same `VideoClip` code as the video page (1 px, opacity 0, inside the overlay root; starts with sound on placement). The plane stays magenta and does not use the video.
+4. `video-texture`: as step 3, but the plane shows the video through a plain MeshBasicMaterial (VideoTexture, `needsUpdate` set from the loop as on the video page).
+5. `video-shader`: as step 4, but with the video page's keying ShaderMaterial in Opaque mode.
+The first step that fails is the cause, or at least points to it. If all five pass, the remaining differences are video-page-only (the hidden-until-first-frame gate, GridHelper floor, diagnostic markers, tune panel and HUD), and they get the same treatment.
+
+### S24 probe ladder test
+Open each link on https://web-ar-git-devin-g1-video-placement-jc-fractal-studios.vercel.app (signed in to Vercel), then Enter AR, scan, tap to place, and take one screenshot with the readout. Stop at the first step where the object is not visible.
+- `/?exp=greeting-test&probe&step=plane`
+- `/?exp=greeting-test&probe&step=video-element` (sound should play)
+- `/?exp=greeting-test&probe&step=video-texture`
+- `/?exp=greeting-test&probe&step=video-shader`
+Still to do: the Neon Garden particle recheck on the same phone/browser, and the ARCore version.
+
 ## Device evidence log
 | Date | Device / OS / browser | Feature and test | Result | Reporter / evidence |
 | --- | --- | --- | --- | --- |
@@ -167,7 +186,9 @@ If a probe variant shows the cube where 1 does not, open the video page with the
 | G1 2026-10-30 | Headless Chrome 137, no WebXR | `&diag` readout, Plane material cycle, Opaque defaults, loop kept alive | 39/39 simulated pass; does not reproduce or resolve the phone failure | Devin, PR #8 |
 | G1 2026-10-30 | S24 Ultra SM-S928U / Android 17 (CP2A.260605.016) / Chrome 156.0.8078.73; ARCore unrecorded | Video page `&diag`, Opaque | Readout: XRProjectionLayer, XR frames advancing, renderErr 0, gl 0, plane visible and in view, frameReady true. **Video still not visible.** FAIL | Juan; screenshot |
 | G1 2026-10-30 | Headless Chrome 137, no WebXR | Probe page and `layer`/`overlay`/`stage` flags (preview path only) | 48/48 simulated pass; cannot test XR output | Devin, PR #8 |
-| G1 2026-10-30 | S24 Ultra / Chrome 156 | Probe isolation pages 1–4, Neon Garden particle recheck | Pending | Juan |
+| G1 2026-10-30 | S24 Ultra SM-S928U / Android 17 / Chrome 156.0.8078.73 | Baseline `&probe` (reticle + untextured cube), default flags, XRProjectionLayer, canvas in overlay root and CSS-hidden | Reticle shown, cube placed and **visibly rendered**, walk-around OK. PASS | Juan; screenshot |
+| G1 2026-10-30 | Headless Chrome 137, no WebXR | Probe ladder steps plane / video-element / video-texture / video-shader (preview path only) | 57/57 simulated pass; cannot test XR output | Devin, PR #8 |
+| G1 2026-10-30 | S24 Ultra / Chrome 156 | Probe ladder steps 2–5; Neon Garden particle recheck | Pending | Juan |
 
 Add video decode/format, audio start/middle/end, keying/matte edges, Reset/Exit/re-entry, QR signed-out launch and iPhone fallback rows as they are actually tested. Never carry historical particle success forward as proof that video works.
 

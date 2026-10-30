@@ -95,7 +95,7 @@ async function showExperience(id: string): Promise<void> {
     root.append(overlay);
     // `&probe`: temporary AR geometry isolation test (see src/xr/probe.ts); the config only names the page.
     const mount = new URLSearchParams(window.location.search).has('probe')
-      ? (await import('./xr/probe')).mountXrProbe
+      ? ((m) => (root: HTMLElement) => m.mountXrProbe(root, config))(await import('./xr/probe'))
       : await loadTemplate(config);
     app.replaceChildren(root);
 

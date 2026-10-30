@@ -16,7 +16,7 @@ Update this file in every implementation PR and before pausing or switching tool
 - Credentials: none supplied or created in this planning task.
 - Personal test clips: none supplied. The repo contains only a generated synthetic fixture (`public/media/synthetic-greeting.mp4`, made by `scripts/make-synthetic-fixture.py`).
 - Current blocker: the AR invisibility cause is not yet identified. The `&diag` readout on the S24 looked healthy (see isolation section), so the next step tests whether any WebGL geometry renders in AR at all. It affects both the synthetic fixture and Juan's MP4 (shared AR rendering path) and needs the S24 diagnostic readout. The preview requires Vercel sign-in.
-- Next concrete action: Juan tests the real greeting page **without `&diag`** using the synthetic clip (see "Real page vs passing probe"). The current page has not been run on the S24 without `&diag` since the first fix commit. If it works, his local MP4 is next. Devin makes no fix until this narrows the cause.
+- Next concrete action: Juan tests the real greeting page **without `&diag`** using the synthetic clip (see "Real page vs passing probe"). As far as recorded, the current page has not been run on the S24 without `&diag` since the first fix commit (`9e14bfb`). If it works, his local MP4 is next. Devin makes no fix until this narrows the cause.
 
 ## Milestone tracking
 | Milestone | Code/status | Browser checks | Phone checks | PR / commit |
@@ -201,7 +201,7 @@ Static comparison of `src/video/mount.ts` against `src/xr/probe.ts` at `step=hud
 Remaining differences:
 - Only with `&diag` (the only way the current page was run on the S24, because the retest link had `&diag`): the visible `PlacementMarkers` (magenta outline + cyan cube, `transparent`, `depthTest: false`, `renderOrder` 10, children of the same anchor), the readout inside the video HUD, and the Plane chip.
 - Always: the markers exist in the anchor but are hidden; `loop` is false from the config (the probe loops); keying uniforms come from the config (also Opaque, same values); two unused diagnostic materials; `isArSupported()` gates Enter AR; a `visibilitychange` pause; note/source HUD text; the `<video>` is appended after the HUD instead of before.
-No difference is a confirmed cause, so no fix was made. The first failure (before the `9e14bfb` changes: antialias, Opaque defaults, texture update from the loop, loop try/catch) and the `&diag` failure are different code; the current page without `&diag` is untested on the phone.
+No difference is a confirmed cause, so no fix was made. The first failure (before the `9e14bfb` changes: antialias, Opaque defaults, texture update from the loop, loop try/catch) and the `&diag` failure are different code; as far as recorded, the current page without `&diag` is untested on the phone.
 Next single test: real page, no `&diag`, synthetic clip. If it shows, the next test is the same page with `&diag` (to see whether diagnostics hide it), then the local MP4. If it fails, the always-present differences above go into the probe one at a time.
 
 ## Device evidence log

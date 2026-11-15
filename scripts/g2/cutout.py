@@ -134,7 +134,7 @@ def matte_fal(normalized, out_dir, model, resolution):
         sys.exit('fal returned no mask_video; cannot build a matte.')
     mk = prov / ('mask' + Path(mask.get('file_name') or 'x.mp4').suffix)
     urllib.request.urlretrieve(mask['url'], mk)
-    return mk, meta
+    return mk, meta, fg
 
 
 def matte_chroma(normalized, out_dir):
@@ -144,31 +144,41 @@ def matte_chroma(normalized, out_dir):
     return raw, {'method': 'ffmpeg chromakey 0x00b140 similarity 0.13 blend 0.05 (synthetic fixture only)'}
 
 
-def read_gray(path, w, h):
-    raw = subprocess.run(
-        ['ffmpeg', '-v', 'error', '-i', str(path), '-f', 'rawvideo', '-pix_fmt', 'gray', '-'],
-        check=True, capture_output=True).stdout
-    return np.frombuffer(raw, np.uint8).reshape(-1, h, w)
-
-
-def matte_stats(frames):
-    f = frames.astype(np.float32) / 255
-    soft = (f > 0.05) & (f < 0.95)
-    diff = np.abs(np.diff(f, axis=0))
-    # Flicker: frame-to-frame change near the subject edge (pixels soft in either frame).
-    band = soft[1:] | soft[:-1]
-    edge_change = (diff * band).sum(axis=(1, 2)) / np.maximum(band.sum(axis=(1, 2)), 1)
-    flips = ((f[1:] > 0.5) != (f[:-1] > 0.5)).mean(axis=(1, 2))
-    coverage = (f > 0.5).mean(axis=(1, 2))
+def matte_stats(path, w, h):
+    """Coverage, softness and flicker of a matte, streamed one frame at a time (bounded memory)."""
+    proc = subprocess.Popen(['ffmpeg', '-v', 'error', '-i', str(path), '-f', 'rawvideo', '-pix_fmt', 'gray', '-'],
+                            stdout=subprocess.PIPE)
+    n = w * h
+    coverage, soft_frac, edge_change, flips = [], [], [], []
+    prev = prev_soft = None
+    while True:
+        buf = proc.stdout.read(n)
+        if len(buf) < n:
+            break
+        f = np.frombuffer(buf, np.uint8).astype(np.float32) / 255
+        soft = (f > 0.05) & (f < 0.95)
+        coverage.append(float((f > 0.5).mean()))
+        soft_frac.append(float(soft.mean()))
+        if prev is not None:
+            # Flicker: frame-to-frame change near the subject edge (pixels soft in either frame).
+            band = soft | prev_soft
+            edge_change.append(float((np.abs(f - prev) * band).sum() / max(int(band.sum()), 1)))
+            flips.append(float(((f > 0.5) != (prev > 0.5)).mean()))
+        prev, prev_soft = f, soft
+    if proc.wait() != 0:
+        sys.exit(f'could not decode matte {path}')
+    if not flips:
+        return {'frames': len(coverage)}
+    r = lambda v, d=4: round(float(v), d)
     return {
-        'frames': int(f.shape[0]),
-        'coverage_mean': round(float(coverage.mean()), 4),
-        'coverage_min_max': [round(float(coverage.min()), 4), round(float(coverage.max()), 4)],
-        'soft_pixel_fraction': round(float(soft.mean()), 4),
-        'edge_change_mean': round(float(edge_change.mean()), 4),
-        'edge_change_p95': round(float(np.percentile(edge_change, 95)), 4),
-        'binary_flip_fraction_mean': round(float(flips.mean()), 5),
-        'binary_flip_fraction_p95': round(float(np.percentile(flips, 95)), 5),
+        'frames': len(coverage),
+        'coverage_mean': r(np.mean(coverage)),
+        'coverage_min_max': [r(min(coverage)), r(max(coverage))],
+        'soft_pixel_fraction': r(np.mean(soft_frac)),
+        'edge_change_mean': r(np.mean(edge_change)),
+        'edge_change_p95': r(np.percentile(edge_change, 95)),
+        'binary_flip_fraction_mean': r(np.mean(flips), 5),
+        'binary_flip_fraction_p95': r(np.percentile(flips, 95), 5),
         'worst_flip_frame': int(np.argmax(flips)) + 1,
     }
 
@@ -198,6 +208,9 @@ def main():
     ap.add_argument('--height', type=int, default=1280, help='normalized long-edge height for portrait')
     ap.add_argument('--fal-model', default='Matting')
     ap.add_argument('--fal-resolution', default='1024x1024')
+    ap.add_argument('--colour', help='colour video to pair with the matte (default: the provider foreground, '
+                    'whose edge colours are refined, when there is one; otherwise the normalized source)')
+    ap.add_argument('--source-colour', action='store_true', help='always use the normalized source colour')
     args = ap.parse_args()
 
     src = Path(args.source).resolve()
@@ -230,8 +243,9 @@ def main():
 
     # 2. Matte.
     t0 = time.time()
+    provider_colour = None
     if args.method == 'fal-birefnet':
-        raw_matte, report['provider'] = matte_fal(normalized, out, args.fal_model, args.fal_resolution)
+        raw_matte, report['provider'], provider_colour = matte_fal(normalized, out, args.fal_model, args.fal_resolution)
     elif args.method == 'chroma-test':
         raw_matte, report['provider'] = matte_chroma(normalized, out)
     elif args.method.startswith('file:'):
@@ -247,13 +261,22 @@ def main():
     ff('-i', raw_matte, '-vf', f'scale={w}:{h}:flags=bicubic,fps={fps},format=gray', '-frames:v', nv['frames'],
        '-an', '-c:v', 'ffv1', matte)
 
+    # Colour: prefer refined provider foreground (background spill removed at soft edges).
+    colour_in = None if args.source_colour else (Path(args.colour).resolve() if args.colour else provider_colour)
+    colour = normalized
+    if colour_in:
+        colour = out / 'colour.mkv'
+        ff('-i', colour_in, '-vf', f'scale={w}:{h}:flags=lanczos,fps={fps},format=yuv444p', '-frames:v', nv['frames'],
+           '-an', '-c:v', 'ffv1', colour)
+    report['colour_source'] = str(colour_in or 'normalized source')
+
     # 4. Deliverables. Video is encoded alone (exact frame count), then muxed with the ORIGINAL
     # source audio, copied when it is AAC, so no step can trim or shift the soundtrack.
     aac = bool(sa and sa['codec'] == 'aac')
 
     def deliver(path, filt, vcodec, acodec):
         tmp = path.with_name(path.stem + '.video' + path.suffix)
-        ff('-i', normalized, '-i', matte, '-filter_complex', filt, '-map', '[v]', '-an', *vcodec,
+        ff('-i', colour, '-i', matte, '-filter_complex', filt, '-map', '[v]', '-an', *vcodec,
            '-frames:v', nv['frames'], tmp)
         mux = ['-map', '1:a:0', *acodec] if sa else []
         ff('-i', tmp, '-i', src, '-map', '0:v:0', *mux, '-c:v', 'copy',
@@ -291,8 +314,8 @@ def main():
         for k in ('packed', 'foreground'):
             sync[k]['audio_bitstream_identical_to_source'] = audio_md5(out / outputs[k]['file']) == src_md5
     report['source_av_offset_s'] = sa and round(sa['start'] - sv['start'], 4)
-    report['matte_quality'] = matte_stats(read_gray(matte, w, h))
-    contact_sheet(normalized, matte, w, h, nv['duration'], out / 'contact.png')
+    report['matte_quality'] = matte_stats(matte, w, h)
+    contact_sheet(colour, matte, w, h, nv['duration'], out / 'contact.png')
     (out / 'report.json').write_text(json.dumps(report, indent=2))
     print(json.dumps({k: report[k] for k in ('sync', 'matte_quality', 'matte_seconds')}, indent=2))
     print(f'outputs in {out}')

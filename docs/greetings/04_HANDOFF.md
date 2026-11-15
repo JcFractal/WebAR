@@ -1,5 +1,5 @@
 # AR Greetings — living handoff
-Last updated: November 14, 2026 (G1 status reconciled with S24 results; iOS deferred; G2 assigned, Devin)
+Last updated: November 14, 2026 (G2 player modes + private cutout pipeline on `devin/g2-cutout`; awaiting real clip and provider decision; Devin)
 Update this file in every implementation PR and before pausing or switching tools.
 
 ## Current status
@@ -13,7 +13,7 @@ Update this file in every implementation PR and before pausing or switching tool
 - Greeting preview deployment: Vercel branch preview https://web-ar-git-devin-g1-video-placement-jc-fractal-studios.vercel.app/?exp=greeting-test (requires Vercel sign-in). Production is unchanged.
 - Existing production URL: https://web-ar-gold.vercel.app/ (main).
 - Backend project, schema and storage: not configured.
-- Processing provider and media format: G2 owns the decision (see G2 section).
+- Processing provider and media format: G2 in progress (see G2 section). Candidate formats implemented: packed colour|matte MP4 (primary) and native-alpha VP9 WebM (comparison); not yet decided on S24 evidence.
 - Personal test clips: none in Git. The repo contains only a generated synthetic fixture (`public/media/synthetic-greeting.mp4`, made by `scripts/make-synthetic-fixture.py`).
 - Open risk: the invisibility cause was never identified, so it could return; the probe (`&probe&step=…`) and `&diag` readout stay as opt-in references.
 - Next concrete action (G1): Juan reviews and merges PR #8 when satisfied; optionally records check 8 (particle AR on both experiences + ARCore version). Devin does not merge.
@@ -26,11 +26,22 @@ Update this file in every implementation PR and before pausing or switching tool
 - Not established by G1: background removal, uploads, sharing of personal greetings, real-footage keying quality, iPhone anything. Still open: check 8 particle AR + ARCore version.
 - After merge, the gallery's `greeting-test` QR (production base URL) starts working; before merge it points at a route production does not have.
 
+## G2 — Android cutout proof (in progress)
+- Branch `devin/g2-cutout`, created from the G1 branch at f43ca6a (tested code 67a13fb + docs). PR https://github.com/JcFractal/WebAR/pull/9, base `devin/g1-video-placement` so the diff is G2 only; retarget to `main` after PR #8 merges. Juan merges.
+- Preview (after Vercel builds the branch; Vercel sign-in): `https://web-ar-git-devin-g2-cutout-jc-fractal-studios.vercel.app/?exp=greeting-cutout-test` (packed) and `?exp=greeting-alpha-test` (native-alpha WebM). Both use the synthetic clip.
+- Player: `KEY_MODES` = `opaque | chroma | packed | alpha`. `packed` = one H.264/AAC MP4 at 2W×H, colour left, grayscale matte right; samples are clamped one texel inside each half; the plane shows half the decoded width. `alpha` = the texture's own alpha (VP9 `yuva420p` WebM). The local picker accepts MP4 and WebM; `*-packed.mp4` → packed, `*.webm` → alpha, otherwise opaque. Formats stay replaceable: the representation is just the `keying.mode` value plus the file.
+- Pipeline: `scripts/g2/cutout.py SOURCE --method fal-birefnet|chroma-test|file:<matte>`. Setup: ffmpeg/ffprobe with libx264, libvpx-vp9, prores_ks, ffv1, libopus; `python3 -m venv ~/g2-venv && ~/g2-venv/bin/pip install -r scripts/g2/requirements.txt`; `FAL_KEY` in the environment for `fal-birefnet` (never in Git). Outputs go to `~/g2-private/<name>/`: `-packed.mp4`, `-alpha.webm`, masters `-foreground.mov` (ProRes 4444 + alpha) and `-matte.mkv` (FFV1), `provider/` raw outputs + response, `contact.png`, `report.json`. Paths inside the repo are refused; `.gitignore` adds `g2-private/` and `*.private.*`.
+- Audio: video is encoded alone with the exact frame count, then muxed with the original source audio (stream copy when AAC; `report.json` checks the audio bitstream is identical to the source). Single-pass `-shortest` / `-frames:v` truncated video by 44 frames or audio by 1.6 s on the synthetic clip and was replaced.
+- Synthetic pipeline proof (`chroma-test`, not real matting): 360/360 frames in every output; packed/foreground audio start offset 0.000 s, duration equal to the source; WebM Opus preroll −0.007 s.
+- Chosen first real method: fal.ai `fal-ai/birefnet/v2/video`, model `Matting`, `operating_resolution` 1024x1024, `output_mask` true, ProRes 4444 output. Per-frame model: watch flicker. Fallback only if needed: RobustVideoMatting locally (GPL-3.0, CPU).
+- Waiting on Juan: one private 10–15 s ordinary S24 MP4 (H.264/AAC, portrait, one consenting adult, upper body, some hand motion) and the `FAL_KEY` decision. Cost: not measured; fal's page shows "$0 per compute second", which is unverified; record the actual billed cost here.
+- Still to evaluate on S24: edges (hair/face/hands), leakage, flicker, audio sync start/middle/end, decode smoothness, load/replay, AR placement, for packed vs alpha.
+
 ## Milestone tracking
 | Milestone | Code/status | Browser checks | Phone checks | PR / commit |
 | --- | --- | --- | --- | --- |
 | G1 video placement | Complete on Android; awaiting Juan's merge. Diagnostics and probe kept behind URL flags | typecheck/build/`npm test` 12/12; headless CDP smoke 68/68 (no WebXR) | S24: checks 1–7 pass; check 8 voice part pass, particle AR + ARCore version not recorded. iOS untested (deferred) | PR #8, tested tip 67a13fb |
-| G2 cutout/format proof | Not started | Not run | Not run | — |
+| G2 cutout/format proof | In progress: player `packed`/`alpha` modes, `scripts/g2/cutout.py`, synthetic cutout fixtures. Real clip + matting provider pending | typecheck/build/`npm test` 15/15; headless desktop Chrome renders both synthetic cutouts | Not run | PR #9 (base `devin/g1-video-placement`), branch `devin/g2-cutout` |
 | G3 persistent creator app | Not started | Not run | Not run | — |
 | G4 automatic processing | Not started | Not run | Not run | — |
 | G5 templates/private trial | Not started | Not run | Not run | — |
@@ -264,7 +275,7 @@ Add video decode/format, audio start/middle/end, keying/matte edges, Reset/Exit/
 | Vercel project | `jc-fractal-studios/web-ar`; posts per-branch previews on PRs | Existing demo + PR previews | Preview for PR #8 ready; protected by Vercel login |
 | Auth / DB | Not provisioned | Planned isolated dev/preview | — |
 | Object storage | Not provisioned | Planned private uploads/outputs | — |
-| Processing API/worker | Not selected | Planned experiment | — |
+| Processing API/worker | fal.ai `fal-ai/birefnet/v2/video` via `fal-client`; secret name `FAL_KEY` | G2 experiment, run from the Devin VM | Not yet provisioned |
 | Job recovery trigger | Not selected | G4 | — |
 | Production public base URL | Existing demo default in src/site.ts | Existing site | Reconfirm before publishing |
 

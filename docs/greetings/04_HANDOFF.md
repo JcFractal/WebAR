@@ -1,27 +1,35 @@
 # AR Greetings — living handoff
-Last updated: October 30, 2026 (G1 AR invisibility no longer reproduces on the S24; remaining acceptance checks, Devin)
+Last updated: November 14, 2026 (G1 status reconciled with S24 results; iOS deferred; G2 assigned, Devin)
 Update this file in every implementation PR and before pausing or switching tools.
 
 ## Current status
-- Stage: G1 in review on PR #8. The AR invisibility from the first S24 tests **no longer reproduces**: on the real greeting page both the synthetic clip (with and without `&diag`) and Juan's local MP4 are visible and play with sound after placement. **The cause is unknown**; no change is a proven fix (see the investigation section). The remaining G1 acceptance checks below are not yet done. G2 not started and paused (do not start until G1 passes and Juan assigns G2).
-- Active agent: Devin (G1). Stopped before G2.
-- Current authorized next assignment: finish the remaining G1 acceptance checks on the S24, one at a time, fixing G1 problems on PR #8. No more isolation tests. Automatic background removal and G2 stay paused; PR #8 stays unmerged until the G1 review is done.
+- Stage: **G1 complete on Android, awaiting Juan's review/merge of PR #8.** S24 acceptance checks 1–7 passed on the real greeting page (no `&diag`), and so did the voice response part of check 8. The rest of check 8 (Neon Garden and Cosmic Vortex AR placement, ARCore version) is not yet recorded; it is a particle regression check and does not block G2. The earlier AR invisibility no longer reproduces; **its cause is unknown** (see the investigation section).
+- iOS / iPhone: **untested.** Juan has no iPhone available. The iPhone milestone (ordinary-playback fallback check and the separate iPhone tracking follow-on) is **deferred** by Juan on 2026-11-14 and does not block Android work. Nothing in G1 or G2 claims iPhone compatibility.
+- Active agent: Devin. G2 (Android cutout proof) assigned by Juan on 2026-11-14 and continues on a new branch from the tested G1 commit; see the G2 section when present.
+- Merges: Juan only. PR #8 stays open until he merges it.
 - Repository: https://github.com/JcFractal/WebAR
-- Observed baseline main: accf90a1b6b968001edfbfb8e71314b994bacdd7.
-- Greeting branch / commit / PR: `devin/g1-video-placement`; G1 code commit a1fd865ea68f7e449f6c0a7265a42f760f6514b5 plus a later handoff-only commit (check the branch tip); PR https://github.com/JcFractal/WebAR/pull/8 (open, not merged).
-- Greeting preview deployment / deployed commit: Vercel branch preview https://web-ar-git-devin-g1-video-placement-jc-fractal-studios.vercel.app/?exp=greeting-test (Vercel check passed for a1fd865; unauthenticated requests get a 302 to Vercel login, so open it signed in to Vercel). Production is unchanged.
-- Existing production URL: https://web-ar-gold.vercel.app/ — historical project address; not rechecked live during planning.
+- Observed main: accf90a1b6b968001edfbfb8e71314b994bacdd7 (rechecked 2026-11-14; unchanged).
+- Greeting branch / commit / PR: `devin/g1-video-placement`; G1 code a1fd865, last code change 0f1ad9e (probe steps 6–10), phone-tested tip 67a13fb (later commits are docs only); PR https://github.com/JcFractal/WebAR/pull/8 (open, mergeable, not merged).
+- Greeting preview deployment: Vercel branch preview https://web-ar-git-devin-g1-video-placement-jc-fractal-studios.vercel.app/?exp=greeting-test (requires Vercel sign-in). Production is unchanged.
+- Existing production URL: https://web-ar-gold.vercel.app/ (main).
 - Backend project, schema and storage: not configured.
-- Processing provider and media format: undecided; G2 owns the decision.
-- Credentials: none supplied or created in this planning task.
-- Personal test clips: none supplied. The repo contains only a generated synthetic fixture (`public/media/synthetic-greeting.mp4`, made by `scripts/make-synthetic-fixture.py`).
-- Current blocker: none known. Open risk: the invisibility cause was never identified, so it could return; if it does, the probe (`&probe&step=…`) and `&diag` readout remain as references. The preview requires Vercel sign-in.
-- Next concrete action: checks 1–7 passed; Juan runs the last acceptance check 8 (particle regression + ARCore version) (see "Remaining G1 acceptance checks"); Devin guides one check at a time and records each result.
+- Processing provider and media format: G2 owns the decision (see G2 section).
+- Personal test clips: none in Git. The repo contains only a generated synthetic fixture (`public/media/synthetic-greeting.mp4`, made by `scripts/make-synthetic-fixture.py`).
+- Open risk: the invisibility cause was never identified, so it could return; the probe (`&probe&step=…`) and `&diag` readout stay as opt-in references.
+- Next concrete action (G1): Juan reviews and merges PR #8 when satisfied; optionally records check 8 (particle AR on both experiences + ARCore version). Devin does not merge.
+
+### PR #8 final review summary (G1)
+- Scope: a separate `video` template (`src/video/`), discriminated config union, lazy `loadTemplate`, `ArPlacement` wording only, synthetic fixture and test-fixture gallery section, local MP4 picker (blob URL, not uploaded), opaque/chroma keying, first-frame gate, tap-to-play, Reset/Exit/re-entry, no microphone use for video. Particle configs, swarm code and audio tuning unchanged apart from the config type.
+- Opt-in diagnostics kept behind URL flags and inert by default: `&diag`, `&probe&step=…`, `layer=legacy`, `overlay=hud`, `stage=visible`. Removing them is optional cleanup; they cost nothing on normal URLs.
+- Checks: `npm run typecheck`, `npm run build`, `npm test` 12/12; headless CDP smoke 68/68 (no WebXR; preview paths only).
+- S24 evidence: checks 1–7 pass (placement/walk-around, AR transport, Reset/Exit/re-enter, height/offset, loop, backgrounding, chroma on the synthetic clip); Juan's own MP4 visible with sound in AR; particle voice response OK after recalibration.
+- Not established by G1: background removal, uploads, sharing of personal greetings, real-footage keying quality, iPhone anything. Still open: check 8 particle AR + ARCore version.
+- After merge, the gallery's `greeting-test` QR (production base URL) starts working; before merge it points at a route production does not have.
 
 ## Milestone tracking
 | Milestone | Code/status | Browser checks | Phone checks | PR / commit |
 | --- | --- | --- | --- | --- |
-| G1 video placement | In review; AR invisibility no longer reproduces (cause unknown); diagnostics and probe kept behind URL flags | typecheck/build/`npm test` 12/12; headless CDP smoke 68/68 (no WebXR) | First tests failed (no video in AR). Later on 2026-10-30: synthetic clip and local MP4 visible with sound in AR on the real page. Remaining acceptance checks pending | PR #8 |
+| G1 video placement | Complete on Android; awaiting Juan's merge. Diagnostics and probe kept behind URL flags | typecheck/build/`npm test` 12/12; headless CDP smoke 68/68 (no WebXR) | S24: checks 1–7 pass; check 8 voice part pass, particle AR + ARCore version not recorded. iOS untested (deferred) | PR #8, tested tip 67a13fb |
 | G2 cutout/format proof | Not started | Not run | Not run | — |
 | G3 persistent creator app | Not started | Not run | Not run | — |
 | G4 automatic processing | Not started | Not run | Not run | — |
@@ -45,6 +53,8 @@ Update this file in every implementation PR and before pausing or switching tool
 | 2026-10-30 | Synthetic labeled fixture in repo; personal clips only via local picker (blob URL, not shared) | No permitted public footage; privacy |
 | 2026-10-30 | Test fixtures listed separately in gallery via manifest `"test": true` | Keeps the two particle demo cards first and unchanged |
 | 2026-10-30 | Playback starts only from a tap (Play/Replay/AR placement tap) | Mobile autoplay-with-sound restrictions |
+| 2026-11-14 | Android-first; iPhone milestone deferred, iOS recorded as untested | Juan has no iPhone; Devin access ends 2026-11-17. iPhone work must not block G2/G3 |
+| 2026-11-14 | G2 starts from the tested G1 code on a new branch; PR #8 merge stays with Juan | Keeps G1 reviewable on its own |
 
 ## Latest implementation report — fill after each milestone
 - Timestamp and implementer: 2026-10-30, Devin (session https://app.devin.ai/sessions/90c954c7fe24476e8853485fba8f404c).
@@ -243,7 +253,8 @@ Planned next test (done, see the device log: it passed, and so did `&diag` and t
 | G1 2026-10-30 | S24 Ultra / Chrome 156 | Acceptance check 6, real page (no `&diag`), synthetic clip: background Chrome and return, preview and AR | Backgrounding ends the AR session and returns to the paused normal preview; re-entering AR restores video and sound. PASS | Juan |
 | G1 2026-10-30 | S24 Ultra / Chrome 156 | Acceptance check 7, real page, synthetic clip: Background = Chroma key in AR, Tolerance/Edge softness adjusted | Green removed in AR; drawn figure and text box preserved; no obvious green halo. PASS (synthetic drawn clip only; says nothing about real hair or edge quality) | Juan; screenshot |
 | G1 2026-10-30 | S24 Ultra / Chrome 156 | Acceptance check 8 (part): particle voice response on production | Voice response works after recalibrating in silence; calibration resolved what Juan observed. No sensitivity changes; current audio defaults kept (audio tuning stays frozen) | Juan |
-| G1 2026-10-30 | S24 Ultra / Chrome 156 | Acceptance check 8 (rest): Neon Garden and Cosmic Vortex AR placement on production; ARCore version | Pending | Juan |
+| G1 2026-10-30 | S24 Ultra / Chrome 156 | Acceptance check 8 (rest): Neon Garden and Cosmic Vortex AR placement on production; ARCore version | Not yet recorded (non-blocking for G2) | Juan |
+| 2026-11-14 | iPhone / iOS Safari | Ordinary playback fallback, AR | **Not tested**: no device available; iPhone milestone deferred by Juan | — |
 
 Add video decode/format, audio start/middle/end, keying/matte edges, Reset/Exit/re-entry, QR signed-out launch and iPhone fallback rows as they are actually tested. Never carry historical particle success forward as proof that video works.
 

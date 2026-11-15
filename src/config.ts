@@ -129,7 +129,11 @@ export interface SwarmSettings {
   swarm?: Partial<SwarmTuning>;
 }
 
-export const KEY_MODES = ['opaque', 'chroma'] as const;
+/**
+ * opaque: plain video. chroma: key out a color. packed: one MP4 with the colour frame on the left
+ * half and a grayscale matte on the right half. alpha: native alpha channel (e.g. VP9 WebM).
+ */
+export const KEY_MODES = ['opaque', 'chroma', 'packed', 'alpha'] as const;
 export type KeyMode = (typeof KEY_MODES)[number];
 
 /** Chroma keying in display (sRGB) space; distances are in the CbCr plane. */
@@ -179,7 +183,7 @@ export const VIDEO_RANGES: Record<'displayHeightMeters' | 'bottomOffsetMeters', 
 };
 
 /** Same-origin static media only; no arbitrary URLs. */
-export const VIDEO_SOURCE_PATTERN = /^media\/[a-z0-9]+(?:-[a-z0-9]+)*\.mp4$/;
+export const VIDEO_SOURCE_PATTERN = /^media\/[a-z0-9]+(?:-[a-z0-9]+)*\.(?:mp4|webm)$/;
 
 export interface VideoSettings {
   /** Path under public/, e.g. "media/synthetic-greeting.mp4". Optional when `localFile` is true. */
@@ -358,7 +362,7 @@ export function validateVideoSettings(s: Record<string, unknown>, problems: stri
     if (!VIDEO_KEYS.has(key)) problems.push(`"settings.${key}" is not a known video setting`);
   }
   if (s.source !== undefined && (typeof s.source !== 'string' || !VIDEO_SOURCE_PATTERN.test(s.source))) {
-    problems.push('"settings.source" must be a path like "media/<name>.mp4" (same-origin MP4 only)');
+    problems.push('"settings.source" must be a path like "media/<name>.mp4" or "media/<name>.webm" (same-origin only)');
   }
   if (s.sourceNote !== undefined && (typeof s.sourceNote !== 'string' || s.sourceNote.length > 200)) {
     problems.push('"settings.sourceNote" must be a string of at most 200 characters');

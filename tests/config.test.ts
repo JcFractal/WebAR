@@ -63,3 +63,19 @@ test('swarm settings are not accepted under the video template and vice versa', 
 test('unknown template is rejected', () => {
   invalid({ ...fixture(), template: 'hologram' }, 'greeting-test', /"template" must be one of: swarm, video/);
 });
+
+test('G2 cutout fixtures validate with packed and alpha modes', () => {
+  for (const [id, mode, ext] of [
+    ['greeting-cutout-test', 'packed', '.mp4'],
+    ['greeting-alpha-test', 'alpha', '.webm'],
+  ] as const) {
+    const c = validateExperience(read(`experiences/${id}.json`), id);
+    assert.equal(c.template, 'video');
+    if (c.template !== 'video') continue;
+    assert.equal(c.settings.keying?.mode, mode);
+    assert.ok(c.settings.source?.endsWith(ext));
+  }
+  const c = fixture();
+  c.settings.keying.mode = 'matte';
+  invalid(c, 'greeting-test', /keying/);
+});

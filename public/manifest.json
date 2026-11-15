@@ -2,6 +2,8 @@
   "experiences": [
     { "id": "neon-garden", "title": "Neon Garden" },
     { "id": "cosmic-vortex", "title": "Cosmic Vortex" },
-    { "id": "greeting-test", "title": "Video greeting test (synthetic clip)", "test": true }
+    { "id": "greeting-test", "title": "Video greeting test (synthetic clip)", "test": true },
+    { "id": "greeting-cutout-test", "title": "Video greeting cutout test (synthetic, packed matte)", "test": true },
+    { "id": "greeting-alpha-test", "title": "Video greeting cutout test (synthetic, alpha WebM)", "test": true }
   ]
 }

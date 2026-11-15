@@ -3,9 +3,9 @@ import { KEYING_DEFAULTS, VIDEO_DEFAULTS, type VideoExperienceConfig } from '../
 import { ArPlacement, isArSupported, type ArState } from '../xr/ar';
 import { applyStageFlag, createXrRenderer, describeFlags, layerReport, overlayRootFor, readXrTestFlags, sessionReport } from '../xr/options';
 import { VideoClip, liveObjectUrlCount } from './clip';
-import { applyKeying, createVideoMaterial } from './material';
+import { applyKeying, createVideoMaterial, setFrameWidth } from './material';
 import { PLANE_MODES, PLANE_MODE_LABELS, PlacementMarkers, type PlaneMaterialMode } from './diagnostics';
-import { checkLocalFile, durationNote, planeSize, rgbToHex } from './media';
+import { checkLocalFile, displayAspect, durationNote, modeForFile, planeSize, rgbToHex } from './media';
 import { createVideoHud, type VideoTune } from './ui';
 
 const FOV = 50;
@@ -74,7 +74,9 @@ export function mountVideo(container: HTMLElement, config: VideoExperienceConfig
   let lastVideoTime = -1;
 
   const layout = () => {
-    const aspect = clip?.aspect ?? 9 / 16;
+    const v = clip?.video;
+    const aspect = displayAspect(v?.videoWidth ?? 0, v?.videoHeight ?? 0, tune.mode);
+    setFrameWidth(material, v?.videoWidth ?? 0);
     const size = planeSize(tune.displayHeightMeters, aspect);
     plane.scale.set(size.width, size.height, 1);
     plane.position.set(0, tune.bottomOffsetMeters + size.height / 2, 0);
@@ -95,7 +97,7 @@ export function mountVideo(container: HTMLElement, config: VideoExperienceConfig
 
   const statusText = (): [string, boolean] => {
     if (localError) return [localError, false];
-    if (!clip) return [allowLocal ? 'Choose a local MP4 to preview it.' : '', false];
+    if (!clip) return [allowLocal ? 'Choose a local video to preview it.' : '', false];
     switch (clip.state) {
       case 'loading':
         return ['Loading video…', false];
@@ -176,8 +178,9 @@ export function mountVideo(container: HTMLElement, config: VideoExperienceConfig
         return;
       }
       localError = '';
-      if (tune.mode !== 'opaque') {
-        tune.mode = 'opaque';
+      const mode = modeForFile(file.name);
+      if (tune.mode !== mode) {
+        tune.mode = mode;
         hud.setTune('mode', tune.mode);
         applyKeying(material, tune);
       }
@@ -185,6 +188,12 @@ export function mountVideo(container: HTMLElement, config: VideoExperienceConfig
     },
     useFixture: () => {
       localError = '';
+      const mode = s.keying?.mode ?? KEYING_DEFAULTS.mode;
+      if (tune.mode !== mode) {
+        tune.mode = mode;
+        hud.setTune('mode', tune.mode);
+        applyKeying(material, tune);
+      }
       if (s.source) setClip(s.source);
     },
     sampleKey: () => {
@@ -208,7 +217,10 @@ export function mountVideo(container: HTMLElement, config: VideoExperienceConfig
       if (key === 'loop') clip?.setLoop(value as boolean);
       else if (key === 'background') renderer.setClearColor(BACKGROUNDS[tune.background], 1);
       else if (key === 'displayHeightMeters' || key === 'bottomOffsetMeters') layout();
-      else applyKeying(material, tune);
+      else {
+        applyKeying(material, tune);
+        if (key === 'mode') layout();
+      }
     },
     cyclePlaneMaterial: () => {
       planeMode = PLANE_MODES[(PLANE_MODES.indexOf(planeMode) + 1) % PLANE_MODES.length];

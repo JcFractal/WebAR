@@ -3,6 +3,26 @@
 export const LOCAL_MAX_BYTES = 100 * 1024 * 1024;
 export const RECOMMENDED_SECONDS: readonly [number, number] = [3, 30];
 export const ACCEPTED_FORMAT = 'MP4 with H.264 video and AAC audio';
+const LOCAL_TYPES = ['video/mp4', 'video/webm'];
+const LOCAL_EXT = /\.(mp4|webm)$/i;
+
+export type LocalKeyMode = 'opaque' | 'packed' | 'alpha';
+
+/**
+ * Initial background mode for a chosen file: a WebM is tried as native alpha, an MP4 named
+ * "...-packed.mp4" as a side-by-side colour|matte pack, anything else as ordinary opaque video.
+ */
+export function modeForFile(name: string): LocalKeyMode {
+  if (/\.webm$/i.test(name)) return 'alpha';
+  if (/[-_.]packed\.mp4$/i.test(name)) return 'packed';
+  return 'opaque';
+}
+
+/** Displayed aspect: a packed frame holds colour and matte side by side, so it shows half its width. */
+export function displayAspect(videoWidth: number, videoHeight: number, mode: string): number {
+  if (!(videoWidth > 0 && videoHeight > 0)) return 9 / 16;
+  return (mode === 'packed' ? videoWidth / 2 : videoWidth) / videoHeight;
+}
 
 export interface FileLike {
   name: string;
@@ -12,9 +32,9 @@ export interface FileLike {
 
 /** Returns a user-facing reason to reject a locally selected file, or null when it may be tried. */
 export function checkLocalFile(file: FileLike): string | null {
-  const isMp4 = file.type === 'video/mp4' || (file.type === '' && /\.mp4$/i.test(file.name));
-  if (!isMp4) {
-    return `“${file.name}” is not an MP4. Choose an ${ACCEPTED_FORMAT} (MOV and other formats are not supported yet).`;
+  const supported = LOCAL_TYPES.includes(file.type) || (file.type === '' && LOCAL_EXT.test(file.name));
+  if (!supported) {
+    return `“${file.name}” is not an MP4 or WebM. Choose an ${ACCEPTED_FORMAT}, or a WebM cutout test file (MOV and other formats are not supported yet).`;
   }
   if (file.size === 0) return `“${file.name}” is empty.`;
   if (file.size > LOCAL_MAX_BYTES) {

@@ -56,7 +56,12 @@ function button(label: string, className = 'hud-chip'): HTMLButtonElement {
   return b;
 }
 
-const KEY_LABELS: Record<KeyMode, string> = { opaque: 'Opaque (no keying)', chroma: 'Chroma key' };
+const KEY_LABELS: Record<KeyMode, string> = {
+  opaque: 'Opaque (no keying)',
+  chroma: 'Chroma key',
+  packed: 'Packed matte (colour | matte)',
+  alpha: 'Native alpha (WebM)',
+};
 
 export function createVideoHud(container: HTMLElement, initial: VideoTune, allowLocal: boolean, diag: boolean, h: VideoHudHandlers): VideoHud {
   const hud = el('div', 'hud');
@@ -92,14 +97,14 @@ export function createVideoHud(container: HTMLElement, initial: VideoTune, allow
 
   const fileInput = el('input');
   fileInput.type = 'file';
-  fileInput.accept = 'video/mp4,.mp4';
+  fileInput.accept = 'video/mp4,.mp4,video/webm,.webm';
   fileInput.hidden = true;
   fileInput.addEventListener('change', () => {
     const file = fileInput.files?.[0];
     fileInput.value = '';
     if (file) h.chooseFile(file);
   });
-  const choose = button('Choose local MP4');
+  const choose = button('Choose local video');
   choose.hidden = !allowLocal;
   choose.addEventListener('click', () => fileInput.click());
   const fixture = button('Use test clip');
@@ -186,7 +191,7 @@ export function createVideoHud(container: HTMLElement, initial: VideoTune, allow
   addRange('displayHeightMeters', 'Video height (whole frame)', hMin, hMax, 0.05, ' m');
   addRange('bottomOffsetMeters', 'Bottom above surface', bMin, bMax, 0.05, ' m');
   addCheckbox('loop', 'Loop');
-  panel.append(el('p', 'panel-heading', 'Keying (test controls)'));
+  panel.append(el('p', 'panel-heading', 'Background / cutout (test controls)'));
   addSelect('mode', 'Background', KEY_MODES.map((m) => [m, KEY_LABELS[m]]));
   const colorRow = el('label', 'tune-row');
   const color = el('input');

@@ -38,6 +38,12 @@ language sql stable security definer set search_path = public as $$
     where u.id = auth.uid() and u.email_confirmed_at is not null
   );
 $$;
+-- Explicit grants: newer Supabase projects no longer grant table access to API roles by default.
+-- RLS still decides which rows `authenticated` sees; `anon` gets nothing (recipients use api/greeting).
+revoke all on public.greetings, public.creator_emails from anon, authenticated;
+grant select, insert, update, delete on public.greetings to authenticated;
+grant all on public.greetings, public.creator_emails to service_role;
+
 revoke all on function public.is_creator() from public;
 grant execute on function public.is_creator() to authenticated;
 

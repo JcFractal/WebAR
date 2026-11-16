@@ -1,5 +1,5 @@
 # AR Greetings — living handoff
-Last updated: November 16, 2026 (G2: one fal run on Juan's clip done, $0.032; cutouts delivered for S24 testing; Devin)
+Last updated: November 16, 2026 (G2: real-clip alpha WebM works in AR on the S24; packed MP4 S24 test pending; Devin)
 Update this file in every implementation PR and before pausing or switching tools.
 
 ## Current status
@@ -40,6 +40,7 @@ Update this file in every implementation PR and before pausing or switching tool
 - fal returned `mask_video` (ProRes 4444, 720×1280, 30 fps, 257 frames) and `video` (refined foreground, 152 MB). The mask URL 404'd for ~1 min after the result, then downloaded; the foreground URL still 404'd 20+ min later (also via `fal_client.result`). The script now retries downloads on 404 rather than failing (`4904b72`). Deliverables were therefore built locally from the downloaded mask with `--method file:provider/mask.mov --source-colour` (no second provider call), so soft edges carry source-background spill.
 - VM evaluation (`report.json`): every output 257 frames; packed + ProRes audio bitstream identical to source, offset 0.000 s; WebM Opus offset −0.014 s. Matte coverage 0.51–0.62, soft-pixel fraction 0.021, binary flip mean 0.58% / p95 1.75%, worst frame 103. Visual: hair/face edges clean with a slight light fringe; at frame 103 a fast, motion-blurred arm at the left frame edge goes partly transparent and the shirt edge shows a light halo. Packed MP4 4.2 MB, alpha WebM 2.5 MB.
 - Delivered to Juan as private chat attachments (not in Git): `juan-take1-packed.mp4`, `juan-take1-alpha.webm`, contact sheet and edge crops. Masters (`-foreground.mov` 217 MB ProRes 4444, `-matte.mkv` FFV1, raw `provider/mask.mov`) remain in `~/g2-private/juan-take1/` on the VM only. S24 test: open `?exp=greeting-cutout-test` on the G2 preview, "Choose local video", pick each file.
+- **S24 result (Juan, Nov 16): the processed alpha WebM (`juan-take1-alpha.webm`, real clip, fal matte + source colour) worked in AR on the S24.** Packed MP4 (`juan-take1-packed.mp4`) S24 test sent; result pending. Detailed edge/flicker/sync notes from the phone not yet reported.
 - Cost: fal pricing API (authenticated) lists `fal-ai/birefnet/v2/video` at $0.000575 per compute second. The session key cannot read billing/usage, so actual cost = reported compute time × unit price (recorded in `provider/response.json` `metrics`).
 - Still to evaluate on S24: edges (hair/face/hands), leakage, flicker, audio sync start/middle/end, decode smoothness, load/replay, AR placement, for packed vs alpha.
 
@@ -47,7 +48,7 @@ Update this file in every implementation PR and before pausing or switching tool
 | Milestone | Code/status | Browser checks | Phone checks | PR / commit |
 | --- | --- | --- | --- | --- |
 | G1 video placement | Complete on Android; awaiting Juan's merge. Diagnostics and probe kept behind URL flags | typecheck/build/`npm test` 12/12; headless CDP smoke 68/68 (no WebXR) | S24: checks 1–7 pass; check 8 voice part pass, particle AR + ARCore version not recorded. iOS untested (deferred) | PR #8, tested tip 67a13fb |
-| G2 cutout/format proof | In progress: player `packed`/`alpha` modes, `scripts/g2/cutout.py`, synthetic cutout fixtures. Real clip + matting provider pending | typecheck/build/`npm test` 15/15; headless desktop Chrome renders both synthetic cutouts | Not run | PR #9 (base `devin/g1-video-placement`), branch `devin/g2-cutout` |
+| G2 cutout/format proof | In progress: player `packed`/`alpha` modes, `scripts/g2/cutout.py`, synthetic fixtures; one fal run on Juan's real clip ($0.032) | typecheck/build/`npm test` 15/15; headless desktop Chrome renders both synthetic cutouts | Real clip: alpha WebM works in AR (Juan, Nov 16); packed MP4 pending | PR #9 (base `devin/g1-video-placement`), branch `devin/g2-cutout` |
 | G3 persistent creator app | Not started | Not run | Not run | — |
 | G4 automatic processing | Not started | Not run | Not run | — |
 | G5 templates/private trial | Not started | Not run | Not run | — |

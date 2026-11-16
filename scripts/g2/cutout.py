@@ -31,6 +31,7 @@ import shutil
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -104,6 +105,19 @@ def audio_md5(path):
                           check=True, capture_output=True, text=True).stdout.strip()
 
 
+def download(url, path, tries=20, wait=15):
+    """fal media URLs can 404 for a while after the result is returned; retry, never resubmit."""
+    for i in range(tries):
+        try:
+            urllib.request.urlretrieve(url, path)
+            return
+        except urllib.error.HTTPError as e:
+            if e.code != 404 or i == tries - 1:
+                raise
+            print(f'{url} not ready (404); retrying in {wait}s', file=sys.stderr)
+            time.sleep(wait)
+
+
 def matte_fal(normalized, out_dir, model, resolution):
     if not os.environ.get('FAL_KEY'):
         sys.exit('FAL_KEY is not set; the fal-birefnet method needs it.')
@@ -132,12 +146,12 @@ def matte_fal(normalized, out_dir, model, resolution):
     }
     (prov / 'response.json').write_text(json.dumps(meta, indent=2))
     fg = prov / ('foreground' + Path(result['video'].get('file_name') or 'x.mov').suffix)
-    urllib.request.urlretrieve(result['video']['url'], fg)
+    download(result['video']['url'], fg)
     mask = result.get('mask_video')
     if not mask:
         sys.exit('fal returned no mask_video; cannot build a matte.')
     mk = prov / ('mask' + Path(mask.get('file_name') or 'x.mp4').suffix)
-    urllib.request.urlretrieve(mask['url'], mk)
+    download(mask['url'], mk)
     return mk, meta, fg
 
 

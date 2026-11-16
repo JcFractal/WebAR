@@ -63,7 +63,9 @@ export function uploadProblems(
       problems.push(`This video is ${meta.width}×${meta.height}; a packed cutout is twice as wide as the person's frame (colour left, matte right). Choose “Ordinary video” if it is not packed.`);
     }
     const [min, max] = GREETING_SECONDS;
-    if (Number.isFinite(meta.duration) && (meta.duration < min || meta.duration > max)) {
+    if (!Number.isFinite(meta.duration)) {
+      problems.push(`This video's length could not be read; re-export it as a finished ${min}–${max} s file.`);
+    } else if (meta.duration < min || meta.duration > max) {
       problems.push(`This video is ${meta.duration.toFixed(1)} s; greetings must be ${min}–${max} s.`);
     }
   }

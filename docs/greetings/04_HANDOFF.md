@@ -53,7 +53,7 @@ Juan's priority (Nov 16, ~4 h of access left): a usable Android creator MVP befo
 - Data (`supabase/migrations/20261116000000_greetings.sql`):
   - `public.greetings`: `owner_id`, a stable `slug` assigned at creation, `title`, `video_path`, `video_format`, `video_mime`, `video_bytes`, width/height/duration, `status draft|published`, `published_at`.
   - RLS allows the owner only. A guard trigger keeps `id`/`owner_id`/`slug`/`video_path` immutable.
-  - Invitation gate: `public.creator_emails` + `is_creator()` are required to insert a greeting or upload. Anyone can sign up, but cannot create.
+  - Invitation gate: `public.creator_emails` + `is_creator()` (the caller's **confirmed** email must be listed) are required to insert a greeting or upload. Anyone can sign up, but cannot create.
   - Private bucket `greeting-videos` (50 MiB, video/mp4 + video/webm). Paths are `<uid>/<greeting id>.<ext>`; owners read/insert/delete their own folder.
 - Recipient: `api/greeting.ts` (Vercel function, Web `GET` signature) looks up one **published** greeting by slug with the service role and returns `{title, video_format, video_url}` with a 6 h signed URL. There is no anonymous table or storage access, so drafts and other greetings cannot be listed. The page then mounts the existing `mountVideo` with `keying.mode = video_format`; playback never depends on the file name. The signed-in owner can preview their own draft at the same URL. In dev, `vite.config.ts` serves the same handler at `/api/greeting`.
 - Links: `VITE_GREETING_BASE_URL` pins links/QRs to one domain. Unset, they use the deployment serving the page, which is a preview until merge, because production doesn't have the route yet. **Set it to `https://web-ar-gold.vercel.app/` after G3 merges, before printing real QRs.**
@@ -69,7 +69,7 @@ Juan's priority (Nov 16, ~4 h of access left): a usable Android creator MVP befo
   - a second phone opening the QR.
 
 ### G3 setup (once per project; no secrets in Git)
-1. Create a dedicated Supabase project (e.g. `webar-greetings`). Auth → Providers → Email: enable it, and turn off "Confirm email" for the MVP (otherwise a confirmation email with the `?create` redirect is needed). Auth → URL configuration: set the Site URL to production and add the preview domain(s) to the redirect URLs.
+1. Create a dedicated Supabase project (e.g. `webar-greetings`). Auth → Providers → Email: enable it and **keep "Confirm email" on**. `is_creator()` requires a confirmed address; with auto-confirm, anyone could register an unused allowlisted email. Auth → URL configuration: set the Site URL to production and add the preview domain(s) to the redirect URLs, because the confirmation link returns to `?create`.
 2. Apply the migration in the SQL editor (or via the Management API `POST /v1/projects/{ref}/database/query`).
 3. Allow a creator: `insert into public.creator_emails values ('<email, lowercase>');`
 4. Vercel project `web-ar`, env vars for Preview (+ Production when merged):

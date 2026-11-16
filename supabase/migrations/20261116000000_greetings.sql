@@ -26,13 +26,17 @@ create table if not exists public.greetings (
 
 alter table public.greetings enable row level security;
 
--- Invitation gate: only listed emails may create greetings or upload (anyone may still sign up).
+-- Invitation gate: only listed, confirmed emails may create greetings or upload (anyone may still sign up).
+-- Keep Auth "Confirm email" on: with auto-confirm, anyone could register an unused listed address.
 create table if not exists public.creator_emails (email text primary key check (email = lower(email)));
 alter table public.creator_emails enable row level security;
 
 create or replace function public.is_creator() returns boolean
 language sql stable security definer set search_path = public as $$
-  select exists (select 1 from public.creator_emails c where c.email = lower(auth.jwt() ->> 'email'));
+  select exists (
+    select 1 from public.creator_emails c join auth.users u on lower(u.email) = c.email
+    where u.id = auth.uid() and u.email_confirmed_at is not null
+  );
 $$;
 revoke all on function public.is_creator() from public;
 grant execute on function public.is_creator() to authenticated;

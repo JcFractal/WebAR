@@ -121,10 +121,14 @@ def matte_fal(normalized, out_dir, model, resolution):
     handle = fal_client.submit(FAL_ENDPOINT, arguments=args)
     result = handle.get()
     t2 = time.time()
+    try:
+        metrics = getattr(handle.status(with_logs=False), 'metrics', None)
+    except Exception as e:  # metrics are informational; never fail the run for them
+        metrics = {'error': str(e)}
     meta = {
         'endpoint': FAL_ENDPOINT, 'request_id': handle.request_id,
         'arguments': {k: v for k, v in args.items() if k != 'video_url'},
-        'upload_seconds': round(t1 - t0, 1), 'processing_seconds': round(t2 - t1, 1), 'result': result,
+        'upload_seconds': round(t1 - t0, 1), 'processing_seconds': round(t2 - t1, 1), 'metrics': metrics, 'result': result,
     }
     (prov / 'response.json').write_text(json.dumps(meta, indent=2))
     fg = prov / ('foreground' + Path(result['video'].get('file_name') or 'x.mov').suffix)
@@ -206,6 +210,7 @@ def main():
     ap.add_argument('--name', help='output base name (default: source file stem)')
     ap.add_argument('--out', help='output directory (default: ~/g2-private/<name>)')
     ap.add_argument('--height', type=int, default=1280, help='normalized long-edge height for portrait')
+    ap.add_argument('--fps', default='30', help='constant output frame rate (phones record variable frame rate)')
     ap.add_argument('--fal-model', default='Matting')
     ap.add_argument('--fal-resolution', default='1024x1024')
     ap.add_argument('--colour', help='colour video to pair with the matte (default: the provider foreground, '
@@ -225,7 +230,8 @@ def main():
     if not sv:
         sys.exit('source has no video stream')
 
-    # 1. Normalize: ffmpeg applies the rotation tag, so the output is upright with no rotation tag.
+    # 1. Normalize: ffmpeg applies the rotation tag, so the output is upright with no rotation tag;
+    # constant frame rate so matte, colour and audio share one frame grid.
     t0 = time.time()
     rot = abs(sv['rotation']) % 180 == 90
     w0, h0 = (sv['height'], sv['width']) if rot else (sv['width'], sv['height'])
@@ -235,7 +241,7 @@ def main():
         scale = f'scale={args.height}:-2:flags=lanczos'
     normalized = out / 'normalized.mp4'
     audio_args = ['-c:a', 'copy'] if sa and sa['codec'] == 'aac' else (['-c:a', 'aac', '-b:a', '160k'] if sa else ['-an'])
-    ff('-i', src, '-map', '0:v:0', '-map', '0:a:0?', '-vf', f'{scale},format=yuv420p', '-c:v', 'libx264',
+    ff('-i', src, '-map', '0:v:0', '-map', '0:a:0?', '-vf', f'{scale},fps={args.fps},format=yuv420p', '-c:v', 'libx264',
        '-preset', 'slow', '-crf', '14', '-g', '30', *audio_args, '-movflags', '+faststart', normalized)
     nv = summary(normalized)['video']
     w, h = nv['width'], nv['height']

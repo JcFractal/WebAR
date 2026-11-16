@@ -69,6 +69,8 @@ If no output is acceptable, record the failed samples and the smallest proposed 
 “Proceed with G2 only in docs/greetings/03_BUILD_PLAN.md. Prove an ordinary greeting recording through background extraction and the actual G1 player. Start with one hosted method and at most one alternative if needed. Choose a measured playback representation, preserve original audio, and record cost, quality and device evidence. Implement the chosen decoder if necessary. No creator backend or iPhone tracking engine yet. Update 04_HANDOFF.md and open a focused PR for code/document changes.”
 
 ## G3 — make the private creator web app real
+> **Priority (Juan, Nov 16):** ship the smallest usable Android creator MVP first: sign in → upload an already processed cutout (packed MP4) → private draft → publish/unpublish → stable link + downloadable QR → a recipient with no account plays/places it in the existing player. Automatic fal processing (G4), decorative templates and visual polish come after this flow works. iOS stays deferred. Implemented on PR #10 (see 04_HANDOFF.md, G3 section). Deviation recorded: account sign-up is open, but creating greetings requires an allowlisted email (`creator_emails`).
+
 ### Implement
 - Confirm a small isolated backend/storage choice; default proposal is Supabase Auth/Postgres/private storage plus thin server API. Keep the Vite player.
 - Invited creators only, no public signup. Use server-side authorization and storage rules; keep service-role/provider credentials out of client builds.

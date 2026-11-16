@@ -36,7 +36,7 @@ Existing user instructions and repository AGENTS.md instructions take precedence
 | --- | --- |
 | G1: video player | Select a prepared local video and place/play it on the S24; use a hosted fixture for a test QR |
 | G2: cutout proof | See real ordinary recordings processed and replayed through the actual player |
-| G3: persistent creator app | Sign in, upload a prepared video, preview it, publish it, and open its stable QR on another phone |
+| G3: persistent creator app (**current priority**: Android creator MVP, PR #10) | Sign in, upload a prepared video, preview it, publish it, and open its stable QR on another phone |
 | G4: recorded-greeting MVP | Upload an ordinary recording and let the app remove the background and publish the result |
 | G5: private alpha | Choose Plain or Birthday, manage greetings, and complete a small recipient trial |
 

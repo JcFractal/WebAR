@@ -19,6 +19,8 @@ test('upload checks accept a packed MP4 and explain bad files', () => {
   assert.match(uploadProblems(mp4, 'packed', { width: 720, height: 1280, duration: 8 }).join(), /twice as wide/);
   assert.match(uploadProblems(mp4, 'opaque', { width: 0, height: 0, duration: 0 }).join(), /could not be decoded/);
   assert.deepEqual(uploadProblems(mp4, 'opaque', { width: 720, height: 1280, duration: 8 }), []);
+  assert.match(uploadProblems(mp4, 'packed', { width: 1440, height: 1280, duration: 45 }).join(), /must be 3–30 s/);
+  assert.match(uploadProblems(mp4, 'packed', { width: 1440, height: 1280, duration: 1.5 }).join(), /must be 3–30 s/);
 });
 
 test('format comes from the stored value, not the file name', () => {

@@ -66,7 +66,7 @@ export class VideoClip {
       this.set('error', mediaErrorMessage(v.error?.code, this.local));
     });
 
-    if (typeof source === 'string' && /^https:\/\//.test(source)) {
+    if (typeof source === 'string' && /^https?:\/\//.test(source)) {
       // Stored greeting (signed storage URL): CORS so WebGL may sample the frames.
       v.crossOrigin = 'anonymous';
       v.src = source;

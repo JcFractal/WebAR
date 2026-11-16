@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
-import { FORMAT_LABELS, VIDEO_FORMATS, greetingUrl, mimeFor, suggestedFormat, uploadProblems, type VideoFormat } from './format';
+import { FORMAT_LABELS, VIDEO_FORMATS, formatProblems, greetingUrl, mimeFor, suggestedFormat, uploadProblems, type VideoFormat } from './format';
 import {
   createGreeting,
   currentSession,
@@ -25,9 +25,12 @@ function btn(label: string, className = 'button'): HTMLButtonElement {
   return b;
 }
 
-/** Links point at the deployment serving this page, so a production QR stays on the production domain. */
+/**
+ * Public link base. VITE_GREETING_BASE_URL pins links/QRs to one domain (set it to production once
+ * G3 is merged); otherwise links use the deployment serving this page, e.g. a preview while testing.
+ */
 function linkBase(): string {
-  return `${window.location.origin}${window.location.pathname}`;
+  return import.meta.env.VITE_GREETING_BASE_URL || `${window.location.origin}${window.location.pathname}`;
 }
 
 function probe(file: File): Promise<{ width: number; height: number; duration: number }> {
@@ -41,7 +44,8 @@ function probe(file: File): Promise<{ width: number; height: number; duration: n
     };
     v.preload = 'metadata';
     v.muted = true;
-    v.onloadedmetadata = () => done({ width: v.videoWidth, height: v.videoHeight, duration: v.duration });
+    // loadeddata: the first frame decoded, not just the container header.
+    v.onloadeddata = () => done({ width: v.videoWidth, height: v.videoHeight, duration: v.duration });
     v.onerror = () => done({ width: 0, height: 0, duration: 0 });
     v.src = url;
   });
@@ -192,13 +196,17 @@ function uploadForm(session: Session, refresh: () => Promise<void>): HTMLElement
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = file.files?.[0];
-    if (!form.reportValidity() || !f) return;
+    if (save.disabled || !form.reportValidity() || !f) return;
+    save.disabled = true;
     const fmt = format.value as VideoFormat;
     status.className = 'muted';
     status.textContent = 'Checking the video…';
     const meta = await probe(f);
     const problems = uploadProblems(f, fmt, meta);
-    if (problems.length) return fail(problems.join(' '));
+    if (problems.length) {
+      save.disabled = false;
+      return fail(problems.join(' '));
+    }
     const mime = mimeFor(f)!;
     const id = crypto.randomUUID();
     const path = `${session.user.id}/${id}.${mime === 'video/webm' ? 'webm' : 'mp4'}`;
@@ -307,6 +315,50 @@ async function card(g: GreetingRow, refresh: () => Promise<void>): Promise<HTMLL
     });
     item.append(qr, link, download, copy);
   }
-  item.append(actions, status);
+  item.append(actions, editor(g, refresh), status);
   return item;
+}
+
+/** Edit title and stored format in place; the link id and video stay the same. */
+function editor(g: GreetingRow, refresh: () => Promise<void>): HTMLElement {
+  const box = el('details', 'creator-edit');
+  box.append(el('summary', undefined, 'Edit title or format'));
+  const form = el('form', 'creator-form');
+  const title = el('input');
+  title.required = true;
+  title.maxLength = 80;
+  title.value = g.title;
+  const format = el('select');
+  for (const f of VIDEO_FORMATS) format.append(new Option(FORMAT_LABELS[f], f));
+  format.value = g.video_format;
+  const save = el('button', 'button', 'Save changes');
+  save.type = 'submit';
+  const status = el('p', 'muted');
+  status.setAttribute('role', 'status');
+  form.append(title, format, save, status);
+  box.append(form);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!form.reportValidity()) return;
+    const fmt = format.value as VideoFormat;
+    const problems = formatProblems(g.video_mime, fmt);
+    if (fmt === 'packed' && g.video_width && g.video_height && g.video_width < g.video_height) {
+      problems.push('This video is taller than wide, so it is not a packed cutout.');
+    }
+    if (problems.length) {
+      status.className = 'error-text';
+      status.textContent = problems.join(' ');
+      return;
+    }
+    save.disabled = true;
+    try {
+      await updateGreeting(g.id, { title: title.value.trim(), video_format: fmt });
+      await refresh();
+    } catch (err) {
+      save.disabled = false;
+      status.className = 'error-text';
+      status.textContent = describeError(err, 'The changes could not be saved.');
+    }
+  });
+  return box;
 }

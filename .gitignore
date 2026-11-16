@@ -7,3 +7,6 @@ dist/
 # G2 private footage and processing outputs never go in Git.
 g2-private/
 *.private.*
+
+# Local Supabase/Vercel settings (never commit keys).
+.env*.local

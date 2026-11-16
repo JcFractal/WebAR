@@ -9,6 +9,7 @@ export const FORMAT_LABELS: Record<VideoFormat, string> = {
   opaque: 'Ordinary video (no cutout)',
 };
 
+export const GREETING_SECONDS = [3, 30] as const;
 export const UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
 export const BUCKET = 'greeting-videos';
 const SLUG = /^[a-f0-9]{12}$/;
@@ -35,6 +36,13 @@ export function suggestedFormat(file: UploadCandidate): VideoFormat {
   return 'packed';
 }
 
+/** Format/container mismatches (also checked when a saved greeting's format is edited). */
+export function formatProblems(mime: string | null, format: VideoFormat): string[] {
+  if (format === 'alpha' && mime === 'video/mp4') return ['Native-alpha cutouts must be WebM files; choose the packed format for an MP4.'];
+  if (format === 'packed' && mime === 'video/webm') return ['Packed cutouts are MP4 files; choose native alpha for a WebM.'];
+  return [];
+}
+
 /** Problems that block saving, in creator wording; empty when the upload may proceed. */
 export function uploadProblems(
   file: UploadCandidate,
@@ -48,14 +56,16 @@ export function uploadProblems(
   if (file.size > UPLOAD_MAX_BYTES) {
     problems.push(`“${file.name}” is ${(file.size / 1048576).toFixed(1)} MiB; the limit is ${UPLOAD_MAX_BYTES / 1048576} MiB.`);
   }
-  if (format === 'alpha' && mime === 'video/mp4') problems.push('Native-alpha cutouts must be WebM files; choose the packed format for an MP4.');
-  if (format === 'packed' && mime === 'video/webm') problems.push('Packed cutouts are MP4 files; choose native alpha for a WebM.');
+  problems.push(...formatProblems(mime, format));
   if (meta) {
     if (!(meta.width > 0 && meta.height > 0)) problems.push('This video could not be decoded on this device.');
     else if (format === 'packed' && meta.width < meta.height) {
       problems.push(`This video is ${meta.width}×${meta.height}; a packed cutout is twice as wide as the person's frame (colour left, matte right). Choose “Ordinary video” if it is not packed.`);
     }
-    if (meta.duration > 120) problems.push(`This video is ${meta.duration.toFixed(0)} s; greetings are limited to 120 s.`);
+    const [min, max] = GREETING_SECONDS;
+    if (Number.isFinite(meta.duration) && (meta.duration < min || meta.duration > max)) {
+      problems.push(`This video is ${meta.duration.toFixed(1)} s; greetings must be ${min}–${max} s.`);
+    }
   }
   return problems;
 }

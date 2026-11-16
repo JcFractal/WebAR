@@ -3,7 +3,7 @@ Last updated: November 16, 2026 (G2 accepted on Android; G3 creator MVP on PR #1
 Update this file in every implementation PR and before pausing or switching tools.
 
 ## Current status
-- Stage: **G3 Android creator MVP built on PR #10, waiting for the hosted Supabase project; G2 accepted on Android (PR #9); G1 complete (PR #8).** None merged (Juan merges). S24 acceptance checks 1–7 passed on the real greeting page (no `&diag`), and so did the voice response part of check 8. The rest of check 8 (Neon Garden and Cosmic Vortex AR placement, ARCore version) is not yet recorded; it is a particle regression check and does not block G2. The earlier AR invisibility no longer reproduces; **its cause is unknown** (see the investigation section).
+- Stage: **G3 Android creator MVP built on PR #10, hosted preview live and verified on desktop, S24 test pending; G2 accepted on Android (PR #9); G1 complete (PR #8).** None merged (Juan merges). S24 acceptance checks 1–7 passed on the real greeting page (no `&diag`), and so did the voice response part of check 8. The rest of check 8 (Neon Garden and Cosmic Vortex AR placement, ARCore version) is not yet recorded; it is a particle regression check and does not block G2. The earlier AR invisibility no longer reproduces; **its cause is unknown** (see the investigation section).
 - iOS / iPhone: **untested.** Juan has no iPhone available. The iPhone milestone (ordinary-playback fallback check and the separate iPhone tracking follow-on) is **deferred** by Juan on 2026-11-14 and does not block Android work. Nothing in G1 or G2 claims iPhone compatibility.
 - Active agent: Devin. G2 (Android cutout proof) assigned by Juan on 2026-11-14 and continues on a new branch from the tested G1 commit; see the G2 section when present.
 - Merges: Juan only. PR #8 stays open until he merges it.
@@ -68,6 +68,14 @@ Juan's priority (Nov 16, ~4 h of access left): a usable Android creator MVP befo
   - the S24 AR placement of a stored greeting;
   - a second phone opening the QR.
 
+### G3 hosted state (Nov 16)
+- Supabase project `webar-greetings` (ref `jqgxymyyxuozmvbujixs`, us-east-1). Migration applied via the Management API. Auth: email on, Confirm email **on**, Site URL `https://web-ar-gold.vercel.app`, redirect allow-list `https://web-ar-gold.vercel.app/**`, `https://*-jc-fractal-studios.vercel.app/**`, `http://localhost:5173/**`. Allowlisted creator: `juan@jcfractal.com`.
+- New Supabase projects no longer grant table privileges to `anon`/`authenticated`/`service_role` by default. The migration now grants them explicitly (`4a2b4b6`). Without that, `api/greeting` returned 502 `lookup-failed`.
+- Vercel `web-ar` (`prj_xFo9OOOefZJpx4f6S4XAjUD2RclB`, team `team_SBqpKAEMAXH5ZRcXOZlZkKb6`). Env vars are set for **Preview, branch `devin/g3-creator` only**: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (sensitive). Not yet set for Production. Juan turned Vercel Authentication off.
+- Preview: `https://web-ar-git-devin-g3-creator-jc-fractal-studios.vercel.app/?create`. Signed-out access verified with curl and a fresh browser context.
+- Hosted E2E (desktop Chrome via CDP against that preview and the real project; temporary confirmed users created via the admin API and deleted afterwards): **16/16 pass**. Covered: sign-in; upload with progress → private draft with `video_format=packed`; second user can't read/publish/sign; non-allowlisted user can't upload; anonymous table/storage listing empty; the API hides the draft (404); publish → link + QR PNG; signed-out recipient plays the 1440-wide packed cutout; unpublish stops it; delete removes row + file; `?exp=neon-garden` loads.
+- At merge: add the same vars for Production plus `VITE_GREETING_BASE_URL=https://web-ar-gold.vercel.app/`, then redeploy.
+
 ### G3 setup (once per project; no secrets in Git)
 1. Create a dedicated Supabase project (e.g. `webar-greetings`). Auth → Providers → Email: enable it and **keep "Confirm email" on**. `is_creator()` requires a confirmed address; with auto-confirm, anyone could register an unused allowlisted email. Auth → URL configuration: set the Site URL to production and add the preview domain(s) to the redirect URLs, because the confirmation link returns to `?create`.
 2. Apply the migration in the SQL editor (or via the Management API `POST /v1/projects/{ref}/database/query`).
@@ -81,7 +89,7 @@ Juan's priority (Nov 16, ~4 h of access left): a usable Android creator MVP befo
 6. Local dev: `cp .env.example .env.local`, fill it in, `npm run dev`; or `npx supabase start` + `supabase db reset` for a fully local stack.
 
 ### G3 next steps (exact)
-1. Juan: supply the Supabase project and keys, and the Vercel env vars/protection (steps above). Devin/next agent: apply the migration, allowlist Juan's email, confirm the preview build.
+1. Done Nov 16: hosted project, migration, allowlist, preview env vars, signed-out access (see hosted state).
 2. S24: open the PR #10 preview `?create` → sign in → upload `juan-take1-packed.mp4` (format Packed) → Publish → Download QR. On a second phone, or signed out/incognito, open the link/QR → play → AR place.
 3. Record the result here; then fix anything the phone finds. After that: G4 automatic fal processing from an ordinary upload (reuse `scripts/g2/cutout.py` logic server-side), then G5 templates/polish.
 
@@ -90,7 +98,7 @@ Juan's priority (Nov 16, ~4 h of access left): a usable Android creator MVP befo
 | --- | --- | --- | --- | --- |
 | G1 video placement | Complete on Android; awaiting Juan's merge. Diagnostics and probe kept behind URL flags | typecheck/build/`npm test` 12/12; headless CDP smoke 68/68 (no WebXR) | S24: checks 1–7 pass; check 8 voice part pass, particle AR + ARCore version not recorded. iOS untested (deferred) | PR #8, tested tip 67a13fb |
 | G2 cutout/format proof | Accepted on Android (Nov 16): player `packed`/`alpha` modes, `scripts/g2/cutout.py`, synthetic fixtures; one fal run on Juan's real clip ($0.032) | typecheck/build/`npm test` 15/15; headless desktop Chrome renders both synthetic cutouts | Real clip: alpha WebM works in AR (Juan, Nov 16); packed MP4 pending | PR #9 (base `devin/g1-video-placement`), branch `devin/g2-cutout` |
-| G3 creator MVP | Built: Supabase auth/storage, private drafts, explicit format, publish/unpublish, link + QR, recipient `api/greeting` | typecheck/build/`npm test` 19/19; local-Supabase desktop Chrome E2E 32/32 | Not run (hosted Supabase not yet provided) | PR #10 (base `devin/g2-cutout`), branch `devin/g3-creator` |
+| G3 creator MVP | Built: Supabase auth/storage, private drafts, explicit format, publish/unpublish, link + QR, recipient `api/greeting` | typecheck/build/`npm test` 19/19; local-Supabase desktop Chrome E2E 32/32 ; hosted preview E2E 16/16 | Not run yet (S24 test pending) | PR #10 (base `devin/g2-cutout`), branch `devin/g3-creator` |
 | G4 automatic processing | Not started | Not run | Not run | — |
 | G5 templates/private trial | Not started | Not run | Not run | — |
 
@@ -321,8 +329,8 @@ Add video decode/format, audio start/middle/end, keying/matte edges, Reset/Exit/
 | Resource | Identifier / nonsecret setup reference | Environment | Status |
 | --- | --- | --- | --- |
 | Vercel project | `jc-fractal-studios/web-ar`; posts per-branch previews on PRs | Existing demo + PR previews | Preview for PR #8 ready; protected by Vercel login |
-| Auth / DB | Dedicated Supabase project (to be created by Juan); schema `supabase/migrations/20261116000000_greetings.sql` | G3 preview → production | Requested Nov 16; not yet provided |
-| Object storage | Supabase Storage private bucket `greeting-videos` (created by the migration) | G3 | Pending the project |
+| Auth / DB | Dedicated Supabase project (to be created by Juan); schema `supabase/migrations/20261116000000_greetings.sql` | G3 preview → production | `webar-greetings` (ref `jqgxymyyxuozmvbujixs`) configured Nov 16 |
+| Object storage | Supabase Storage private bucket `greeting-videos` (created by the migration) | G3 | Created on the hosted project Nov 16 |
 | Processing API/worker | fal.ai `fal-ai/birefnet/v2/video` via `fal-client`; secret name `FAL_KEY` | G2 experiment, run from the Devin VM | Session-only key provided Nov 16 (topped up by Juan); one run, $0.032 |
 | Job recovery trigger | Not selected | G4 | — |
 | Production public base URL | Existing demo default in src/site.ts | Existing site | Reconfirm before publishing |

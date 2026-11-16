@@ -1,5 +1,5 @@
 # AR Greetings — living handoff
-Last updated: November 16, 2026 (G2: Juan's clip received; first fal run blocked by exhausted fal balance; Devin)
+Last updated: November 16, 2026 (G2: one fal run on Juan's clip done, $0.032; cutouts delivered for S24 testing; Devin)
 Update this file in every implementation PR and before pausing or switching tools.
 
 ## Current status
@@ -36,7 +36,10 @@ Update this file in every implementation PR and before pausing or switching tool
 - Colour paired with the matte: the provider's refined foreground when it returns one (spill removed at soft edges), else the normalized source; `--colour PATH` / `--source-colour` override, and `report.json` records `colour_source`. Matte statistics stream frame by frame (about 650 MB peak RSS on the synthetic run).
 - Chosen first real method: fal.ai `fal-ai/birefnet/v2/video`, model `Matting`, `operating_resolution` 1024x1024, `output_mask` true, ProRes 4444 output. Per-frame model: watch flicker. Fallback only if needed: RobustVideoMatting locally (GPL-3.0, CPU).
 - Real clip received Nov 16 (private attachment, not in Git): 8.6 s 3840×2160 HEVC, rotation −90 (portrait), VFR ≈29 fps, AAC stereo 48 kHz. Normalized to 720×1280, constant 30 fps, 257 frames, AAC copied (`~/g2-private/juan-take1/`, VM only).
-- First `fal-birefnet` run blocked before upload: fal returned 403 "User is locked. Reason: Exhausted balance." Nothing uploaded, $0.00 billed. Waiting on Juan to top up at fal.ai/dashboard/billing; then one run, report actual cost before any further runs.
+- First attempt blocked before upload (fal 403 "Exhausted balance"; nothing uploaded, $0.00). After Juan's top-up, **one run**: request `01a1e652-1617-76a0-97fe-3ab106efcbfe`, `Matting` @ 1024×1024, `refine_foreground`, ProRes 4444 out; upload 0.7 s, wall 56.6 s, fal `inference_time` 56.2 s → **$0.032** (56.2 × $0.000575). No further runs without Juan's approval.
+- fal returned `mask_video` (ProRes 4444, 720×1280, 30 fps, 257 frames) and `video` (refined foreground, 152 MB). The mask URL 404'd for ~1 min after the result, then downloaded; the foreground URL still 404'd 20+ min later (also via `fal_client.result`). The script now retries downloads on 404 rather than failing (`4904b72`). Deliverables were therefore built locally from the downloaded mask with `--method file:provider/mask.mov --source-colour` (no second provider call), so soft edges carry source-background spill.
+- VM evaluation (`report.json`): every output 257 frames; packed + ProRes audio bitstream identical to source, offset 0.000 s; WebM Opus offset −0.014 s. Matte coverage 0.51–0.62, soft-pixel fraction 0.021, binary flip mean 0.58% / p95 1.75%, worst frame 103. Visual: hair/face edges clean with a slight light fringe; at frame 103 a fast, motion-blurred arm at the left frame edge goes partly transparent and the shirt edge shows a light halo. Packed MP4 4.2 MB, alpha WebM 2.5 MB.
+- Delivered to Juan as private chat attachments (not in Git): `juan-take1-packed.mp4`, `juan-take1-alpha.webm`, contact sheet and edge crops. Masters (`-foreground.mov` 217 MB ProRes 4444, `-matte.mkv` FFV1, raw `provider/mask.mov`) remain in `~/g2-private/juan-take1/` on the VM only. S24 test: open `?exp=greeting-cutout-test` on the G2 preview, "Choose local video", pick each file.
 - Cost: fal pricing API (authenticated) lists `fal-ai/birefnet/v2/video` at $0.000575 per compute second. The session key cannot read billing/usage, so actual cost = reported compute time × unit price (recorded in `provider/response.json` `metrics`).
 - Still to evaluate on S24: edges (hair/face/hands), leakage, flicker, audio sync start/middle/end, decode smoothness, load/replay, AR placement, for packed vs alpha.
 
@@ -278,7 +281,7 @@ Add video decode/format, audio start/middle/end, keying/matte edges, Reset/Exit/
 | Vercel project | `jc-fractal-studios/web-ar`; posts per-branch previews on PRs | Existing demo + PR previews | Preview for PR #8 ready; protected by Vercel login |
 | Auth / DB | Not provisioned | Planned isolated dev/preview | — |
 | Object storage | Not provisioned | Planned private uploads/outputs | — |
-| Processing API/worker | fal.ai `fal-ai/birefnet/v2/video` via `fal-client`; secret name `FAL_KEY` | G2 experiment, run from the Devin VM | Session-only key provided Nov 16; account balance exhausted (top-up pending) |
+| Processing API/worker | fal.ai `fal-ai/birefnet/v2/video` via `fal-client`; secret name `FAL_KEY` | G2 experiment, run from the Devin VM | Session-only key provided Nov 16 (topped up by Juan); one run, $0.032 |
 | Job recovery trigger | Not selected | G4 | — |
 | Production public base URL | Existing demo default in src/site.ts | Existing site | Reconfirm before publishing |
 

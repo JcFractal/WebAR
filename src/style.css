@@ -199,3 +199,14 @@ html.ar-active.ar-stage-visible .stage { visibility: visible; }
 .test-badge { font-size: 0.75rem; color: #ffb347; }
 .diag-readout { position: absolute; top: 3.5rem; left: 0.5rem; right: 0.5rem; z-index: 5; margin: 0; padding: 0.4rem 0.5rem; font: 11px/1.35 ui-monospace, monospace; color: #7dffd8; background: #000000b3; border-radius: 0.4rem; white-space: pre-wrap; word-break: break-all; pointer-events: none; }
 .diag-readout[hidden] { display: none; }
+
+.creator-form { display: grid; gap: 0.6rem; max-width: 32rem; margin-bottom: 1.5rem; }
+.creator-form input, .creator-form select { font: inherit; padding: 0.55rem 0.6rem; border-radius: 0.4rem; border: 1px solid var(--muted); background: transparent; color: inherit; }
+.creator-form select option { color: #000; }
+.creator-form progress { width: 100%; height: 0.8rem; }
+.creator-label { display: grid; gap: 0.3rem; color: var(--muted); }
+.creator-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.creator-actions .button { margin-top: 0; }
+.button.secondary { opacity: 0.85; }
+.link-button { background: none; border: 0; padding: 0; color: inherit; text-decoration: underline; cursor: pointer; font: inherit; }
+.status-published { color: #6fdc8c; }

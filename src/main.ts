@@ -29,6 +29,9 @@ async function showEntry(): Promise<void> {
   document.title = 'JC Fractal WebAR';
   const page = el('main', 'page');
   page.append(el('p', 'eyebrow', 'JC Fractal'), el('h1', undefined, 'WebAR Voice Sculptures'));
+  const create = el('a', 'qr-url', 'Create an AR greeting →');
+  create.href = '?create';
+  page.append(create);
   app.replaceChildren(page);
 
   try {
@@ -116,9 +119,23 @@ async function showExperience(id: string): Promise<void> {
   }
 }
 
+function showGreetingError(title: string, message: string): void {
+  document.title = 'Greeting unavailable · JC Fractal WebAR';
+  const page = el('main', 'page');
+  page.setAttribute('role', 'alert');
+  page.append(el('p', 'eyebrow', 'Greeting'), el('h1', undefined, title), el('p', 'error-text', message));
+  app.replaceChildren(page);
+}
+
 const params = new URLSearchParams(window.location.search);
 const exp = params.get('exp');
-if (exp === null) {
+const greeting = params.get('g');
+if (greeting !== null) {
+  app.replaceChildren(el('main', 'page', 'Loading greeting…'));
+  void import('./greetings/recipient').then((m) => m.showGreeting(app, greeting.trim(), showGreetingError));
+} else if (params.has('create')) {
+  void import('./greetings/creator').then((m) => m.showCreator(app));
+} else if (exp === null) {
   void showEntry();
 } else {
   void showExperience(exp.trim());

@@ -1,5 +1,5 @@
 # AR Greetings — living handoff
-Last updated: November 14, 2026 (G2 player modes + private cutout pipeline on `devin/g2-cutout`; awaiting real clip and provider decision; Devin)
+Last updated: November 16, 2026 (G2: Juan's clip received; first fal run blocked by exhausted fal balance; Devin)
 Update this file in every implementation PR and before pausing or switching tools.
 
 ## Current status
@@ -35,7 +35,9 @@ Update this file in every implementation PR and before pausing or switching tool
 - Synthetic pipeline proof (`chroma-test`, not real matting): 360/360 frames in every output; packed/foreground audio start offset 0.000 s, duration equal to the source; WebM Opus preroll −0.007 s.
 - Colour paired with the matte: the provider's refined foreground when it returns one (spill removed at soft edges), else the normalized source; `--colour PATH` / `--source-colour` override, and `report.json` records `colour_source`. Matte statistics stream frame by frame (about 650 MB peak RSS on the synthetic run).
 - Chosen first real method: fal.ai `fal-ai/birefnet/v2/video`, model `Matting`, `operating_resolution` 1024x1024, `output_mask` true, ProRes 4444 output. Per-frame model: watch flicker. Fallback only if needed: RobustVideoMatting locally (GPL-3.0, CPU).
-- Waiting on Juan: one private 10–15 s ordinary S24 MP4 (H.264/AAC, portrait, one consenting adult, upper body, some hand motion) and the `FAL_KEY` decision. Cost: not measured; fal's page shows "$0 per compute second", which is unverified; record the actual billed cost here.
+- Real clip received Nov 16 (private attachment, not in Git): 8.6 s 3840×2160 HEVC, rotation −90 (portrait), VFR ≈29 fps, AAC stereo 48 kHz. Normalized to 720×1280, constant 30 fps, 257 frames, AAC copied (`~/g2-private/juan-take1/`, VM only).
+- First `fal-birefnet` run blocked before upload: fal returned 403 "User is locked. Reason: Exhausted balance." Nothing uploaded, $0.00 billed. Waiting on Juan to top up at fal.ai/dashboard/billing; then one run, report actual cost before any further runs.
+- Cost: fal pricing API (authenticated) lists `fal-ai/birefnet/v2/video` at $0.000575 per compute second. The session key cannot read billing/usage, so actual cost = reported compute time × unit price (recorded in `provider/response.json` `metrics`).
 - Still to evaluate on S24: edges (hair/face/hands), leakage, flicker, audio sync start/middle/end, decode smoothness, load/replay, AR placement, for packed vs alpha.
 
 ## Milestone tracking
@@ -276,7 +278,7 @@ Add video decode/format, audio start/middle/end, keying/matte edges, Reset/Exit/
 | Vercel project | `jc-fractal-studios/web-ar`; posts per-branch previews on PRs | Existing demo + PR previews | Preview for PR #8 ready; protected by Vercel login |
 | Auth / DB | Not provisioned | Planned isolated dev/preview | — |
 | Object storage | Not provisioned | Planned private uploads/outputs | — |
-| Processing API/worker | fal.ai `fal-ai/birefnet/v2/video` via `fal-client`; secret name `FAL_KEY` | G2 experiment, run from the Devin VM | Not yet provisioned |
+| Processing API/worker | fal.ai `fal-ai/birefnet/v2/video` via `fal-client`; secret name `FAL_KEY` | G2 experiment, run from the Devin VM | Session-only key provided Nov 16; account balance exhausted (top-up pending) |
 | Job recovery trigger | Not selected | G4 | — |
 | Production public base URL | Existing demo default in src/site.ts | Existing site | Reconfirm before publishing |
 

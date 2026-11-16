@@ -45,6 +45,7 @@ export function describeError(err: unknown, fallback: string): string {
   const msg = err instanceof Error ? err.message : typeof err === 'object' && err && 'message' in err ? String((err as { message: unknown }).message) : '';
   if (/Invalid login credentials/i.test(msg)) return 'Email or password is incorrect.';
   if (/Email not confirmed/i.test(msg)) return 'This email is not confirmed yet. Open the confirmation email, then sign in.';
+  if (/row-level security|violates row-level|Unauthorized|403/i.test(msg)) return 'This account is not enabled for creating greetings yet. Ask the site owner to add your email.';
   if (/Failed to fetch|NetworkError|network/i.test(msg)) return 'No connection to the greeting service. Check your network and try again.';
   return msg ? `${fallback} (${msg})` : fallback;
 }
@@ -116,24 +117,36 @@ export async function updateGreeting(id: string, patch: Partial<Pick<GreetingRow
   return data as GreetingRow;
 }
 
+/** Row first, so a published link never points at a missing file; a failed file removal is reported. */
 export async function deleteGreeting(g: GreetingRow): Promise<void> {
   const { error } = await supabase().from('greetings').delete().eq('id', g.id);
   if (error) throw error;
-  await supabase().storage.from(BUCKET).remove([g.video_path]);
+  const removed = await supabase().storage.from(BUCKET).remove([g.video_path]);
+  if (removed.error || removed.data?.length === 0) {
+    throw new Error(`The greeting was deleted, but its video file (${g.video_path}) could not be removed; delete it in Supabase Storage.`);
+  }
 }
 
-/** Published greeting by link id, or the signed-in owner's own draft (preview). */
-export async function loadForPlayback(slug: string): Promise<{ greeting: PublishedGreeting; draft: boolean } | null> {
-  const db = supabase();
-  const { data, error } = await db.rpc('get_published_greeting', { p_slug: slug });
-  if (error) throw error;
-  const rows = data as PublishedGreeting[] | null;
-  if (rows && rows.length > 0) return { greeting: rows[0], draft: false };
-  if (await currentSession()) {
-    const own = await db.from('greetings').select('slug,title,video_path,video_format,video_mime').eq('slug', slug).maybeSingle();
-    if (own.data) return { greeting: own.data as PublishedGreeting, draft: true };
+export class GreetingUnavailable extends Error {}
+
+/** Recipient: published greeting via api/greeting.ts; the signed-in owner can also preview a draft. */
+export async function loadForPlayback(slug: string): Promise<{ greeting: PublishedGreeting; videoUrl: string; draft: boolean }> {
+  const res = await fetch(`${import.meta.env.BASE_URL}api/greeting?g=${encodeURIComponent(slug)}`, { cache: 'no-store' });
+  if (res.ok) {
+    const body = (await res.json()) as PublishedGreeting & { video_url: string };
+    return { greeting: body, videoUrl: body.video_url, draft: false };
   }
-  return null;
+  if (res.status !== 404) {
+    throw new GreetingUnavailable(res.status === 503 ? SERVICE_MISSING : `The greeting service did not respond correctly (HTTP ${res.status}). Try again shortly.`);
+  }
+  if (URL_ && KEY && (await currentSession())) {
+    const own = await supabase().from('greetings').select('slug,title,video_path,video_format,video_mime').eq('slug', slug).maybeSingle();
+    if (own.data) {
+      const g = own.data as PublishedGreeting;
+      return { greeting: g, videoUrl: await signedVideoUrl(g.video_path), draft: true };
+    }
+  }
+  throw new GreetingUnavailable('This greeting is not published, or the link is wrong. Ask the sender for a new link.');
 }
 
 export async function signedVideoUrl(path: string): Promise<string> {

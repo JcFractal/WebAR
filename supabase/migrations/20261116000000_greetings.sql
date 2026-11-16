@@ -26,11 +26,22 @@ create table if not exists public.greetings (
 
 alter table public.greetings enable row level security;
 
+-- Invitation gate: only listed emails may create greetings or upload (anyone may still sign up).
+create table if not exists public.creator_emails (email text primary key check (email = lower(email)));
+alter table public.creator_emails enable row level security;
+
+create or replace function public.is_creator() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.creator_emails c where c.email = lower(auth.jwt() ->> 'email'));
+$$;
+revoke all on function public.is_creator() from public;
+grant execute on function public.is_creator() to authenticated;
+
 -- Owners manage their own rows only. No anonymous table access: recipients use the function below.
 drop policy if exists greetings_owner_select on public.greetings;
 create policy greetings_owner_select on public.greetings for select to authenticated using (owner_id = auth.uid());
 drop policy if exists greetings_owner_insert on public.greetings;
-create policy greetings_owner_insert on public.greetings for insert to authenticated with check (owner_id = auth.uid());
+create policy greetings_owner_insert on public.greetings for insert to authenticated with check (owner_id = auth.uid() and public.is_creator());
 drop policy if exists greetings_owner_update on public.greetings;
 create policy greetings_owner_update on public.greetings for update to authenticated
   using (owner_id = auth.uid()) with check (owner_id = auth.uid());
@@ -57,23 +68,8 @@ drop trigger if exists greetings_guard on public.greetings;
 create trigger greetings_guard before insert or update on public.greetings
   for each row execute function public.greetings_guard();
 
--- Recipient lookup: one published greeting by its link id; drafts and other columns stay private.
-create or replace function public.get_published_greeting(p_slug text)
-returns table (slug text, title text, video_path text, video_format text, video_mime text,
-               video_width int, video_height int, video_duration real)
-language sql stable security definer set search_path = public as $$
-  select g.slug, g.title, g.video_path, g.video_format, g.video_mime, g.video_width, g.video_height, g.video_duration
-  from public.greetings g where g.slug = p_slug and g.status = 'published' limit 1;
-$$;
-revoke all on function public.get_published_greeting(text) from public;
-grant execute on function public.get_published_greeting(text) to anon, authenticated;
-
-create or replace function public.is_published_video(p_path text) returns boolean
-language sql stable security definer set search_path = public as $$
-  select exists (select 1 from public.greetings g where g.video_path = p_path and g.status = 'published');
-$$;
-revoke all on function public.is_published_video(text) from public;
-grant execute on function public.is_published_video(text) to anon, authenticated;
+-- Recipients never touch the table or storage directly: api/greeting.ts looks up one published
+-- greeting by slug with the service role and returns a short-lived signed video URL.
 
 -- Private bucket: 50 MiB per file, MP4/WebM only. Paths are <owner uuid>/<greeting uuid>.<ext>.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
@@ -82,11 +78,13 @@ on conflict (id) do update set public = false, file_size_limit = excluded.file_s
   allowed_mime_types = excluded.allowed_mime_types;
 
 drop policy if exists greeting_videos_owner_all on storage.objects;
-create policy greeting_videos_owner_all on storage.objects for all to authenticated
-  using (bucket_id = 'greeting-videos' and (storage.foldername(name))[1] = auth.uid()::text)
-  with check (bucket_id = 'greeting-videos' and (storage.foldername(name))[1] = auth.uid()::text);
-
--- Anyone may read (sign a URL for) a video whose greeting is published; unpublishing revokes new URLs.
+drop policy if exists greeting_videos_owner_read on storage.objects;
+create policy greeting_videos_owner_read on storage.objects for select to authenticated
+  using (bucket_id = 'greeting-videos' and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists greeting_videos_owner_insert on storage.objects;
+create policy greeting_videos_owner_insert on storage.objects for insert to authenticated
+  with check (bucket_id = 'greeting-videos' and (storage.foldername(name))[1] = auth.uid()::text and public.is_creator());
+drop policy if exists greeting_videos_owner_delete on storage.objects;
+create policy greeting_videos_owner_delete on storage.objects for delete to authenticated
+  using (bucket_id = 'greeting-videos' and (storage.foldername(name))[1] = auth.uid()::text);
 drop policy if exists greeting_videos_published_read on storage.objects;
-create policy greeting_videos_published_read on storage.objects for select to anon, authenticated
-  using (bucket_id = 'greeting-videos' and public.is_published_video(name));

@@ -1,6 +1,6 @@
 import { mountVideo } from '../video/mount';
 import { isValidSlug, playerConfig } from './format';
-import { describeError, loadForPlayback, signedVideoUrl } from './service';
+import { GreetingUnavailable, describeError, loadForPlayback } from './service';
 
 /** Recipient route `?g=<link id>`: no account needed; plays in the existing video player. */
 export async function showGreeting(
@@ -13,17 +13,9 @@ export async function showGreeting(
   try {
     found = await loadForPlayback(slug);
   } catch (err) {
-    return showError('Greeting unavailable', describeError(err, 'The greeting could not be loaded.'));
+    return showError('Greeting unavailable', err instanceof GreetingUnavailable ? err.message : describeError(err, 'The greeting could not be loaded.'));
   }
-  if (!found) {
-    return showError('Greeting unavailable', 'This greeting is not published, or the link is wrong. Ask the sender for a new link.');
-  }
-  let url: string;
-  try {
-    url = await signedVideoUrl(found.greeting.video_path);
-  } catch (err) {
-    return showError('Greeting unavailable', describeError(err, 'The greeting video could not be opened.'));
-  }
+  const url = found.videoUrl;
   const config = playerConfig(found.greeting, url);
   if (found.draft) config.settings.sourceNote = 'Draft preview: only you can see this until it is published.';
   document.title = `${config.title} · JC Fractal WebAR`;

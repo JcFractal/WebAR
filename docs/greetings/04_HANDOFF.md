@@ -1,5 +1,5 @@
 # AR Greetings — living handoff
-Last updated: November 17, 2026 (G4 on `devin/1794878050-g4-processing`: mock-tested, one real fal run ($0.0281) passed on the S24; not merged; paid processing disabled; Devin)
+Last updated: November 17, 2026 (G4 on `devin/1794878050-g4-processing` passed on the S24, not merged, paid processing disabled; Android polish on `devin/1794885141-android-polish`, preview only, awaiting Juan's S24 check; Devin)
 Update this file in every implementation PR and before pausing or switching tools.
 
 ## Current status
@@ -137,6 +137,16 @@ Validation passed on both: upright 720×1280 at 30 fps (257 and 900 frames), pac
 - Progress is driven by the creator page (`tick` loop) plus the fal webhook (which also triggers packing). If the webhook is lost and the page is closed, the job continues next time the creator opens `?create`; stale jobs time out. No cron (Vercel Hobby cron runs once a day).
 - 4K phone recordings hit 50 MB after ~10 s; creators should record at 1080p.
 - The fal adapter follows fal's documented queue/webhook contract but has never talked to fal.
+
+## Android polish (Nov 17; branch `devin/1794885141-android-polish`, stacked on G4 / PR #12)
+Requested by Juan after the G4 S24 pass. Playback, keying, AR placement and Replay code are unchanged; only text, layout and a header style were touched.
+- **Creator wording:** numbered upload → background removal → preview → publish steps at the top; labelled Title and Style fields; plain progress text (`Uploading… N%. Keep this page open…`, `Step 1 of 3: preparing your video… (about 1 minute)`); errors say what was kept and what to do next; offline upload failures are named; cards say when a draft can be published and how recipients open the link/QR.
+- **Mobile layout:** 16 px inputs (no Android zoom), 48 px-tall buttons, two-column action grid under 480 px wide.
+- **AR instructions:** recipient header explains Play vs Enter AR (or says to use Chrome on Android with ARCore when AR is unavailable) and hides once AR starts; in AR: "Point your phone at the floor and move it slowly until a ring appears", "Tap the screen to place the greeting on the ring", then a hint to step back/walk around/Reset placement. Wording is shared with the particle pages (`src/xr/ar.ts`).
+- **Plain/Birthday style:** `greetings.theme` (`plain` default, or `birthday`) via `20261118000000_greeting_theme.sql`, **already applied to the hosted project** (additive; production G3 code is unaffected and `/api/greeting` on production still returned 200). Birthday adds a "Happy birthday" tag, gradient title and confetti header on the recipient page; the video/AR rendering is the same.
+- **Tests:** `npm test` 31/31, typecheck and build pass. Hosted polish preview with the mock provider, desktop Chrome at phone size: prepared flow 34/34 (incl. Birthday shown to a signed-out recipient), ordinary flow 20/20 (refresh recovery, publish gate, cancel/retry, delete cleanup, 50 MiB limit). Test accounts and files removed afterwards.
+- **Preview env:** branch-scoped Supabase vars and `VITE_ORDINARY_UPLOAD=1` for this branch only; no `PROCESSING_PROVIDER`/`FAL_KEY` (ordinary uploads use the mock matte, not a real cutout). Production unchanged.
+- **Not yet:** Juan's S24 check of the new wording/layout/AR text; iOS untested (deferred). Merge order: PR #12 first, then this PR.
 
 ## Milestone tracking
 | Milestone | Code/status | Browser checks | Phone checks | PR / commit |

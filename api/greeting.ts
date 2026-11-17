@@ -26,7 +26,7 @@ export async function GET(request: Request): Promise<Response> {
   const db = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data, error } = await db
     .from('greetings')
-    .select('slug,title,video_path,video_format,video_mime')
+    .select('slug,title,theme,video_path,video_format,video_mime')
     .eq('slug', slug)
     .eq('status', 'published')
     .maybeSingle();
@@ -34,5 +34,5 @@ export async function GET(request: Request): Promise<Response> {
   if (!data) return json(404, { error: 'not-published' });
   const signed = await db.storage.from(BUCKET).createSignedUrl(data.video_path, URL_TTL_SECONDS);
   if (signed.error) return json(502, { error: 'video-unavailable' });
-  return json(200, { slug: data.slug, title: data.title, video_format: data.video_format, video_mime: data.video_mime, video_url: signed.data.signedUrl });
+  return json(200, { slug: data.slug, title: data.title, theme: data.theme, video_format: data.video_format, video_mime: data.video_mime, video_url: signed.data.signedUrl });
 }

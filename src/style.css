@@ -213,3 +213,50 @@ html.ar-active.ar-stage-visible .stage { visibility: visible; }
 [hidden] { display: none !important; }
 .creator-edit { margin-top: 0.5rem; }
 .creator-edit summary { cursor: pointer; color: var(--muted); }
+
+/* Android polish: creator steps, readable hints, phone-sized controls */
+.creator-steps { margin: 0 0 1rem; padding-left: 1.3rem; color: var(--muted); line-height: 1.5; display: grid; gap: 0.25rem; }
+.small { font-size: 0.85rem; line-height: 1.45; margin: 0; }
+.creator-form input, .creator-form select { font-size: 16px; min-height: 3rem; }
+.creator-form .button, .creator-actions .button { min-height: 3rem; }
+.experience-card > p { margin: 0; text-align: center; }
+.media-panel { width: 100%; text-align: center; }
+.media-panel .creator-actions { justify-content: center; }
+.ar-help { width: 100%; margin: 0.35rem 0 0; color: var(--fg); font-size: 0.9rem; line-height: 1.4; text-shadow: 0 1px 4px #000; }
+html.ar-active .ar-help { display: none; }
+@media (max-width: 480px) {
+  .page { padding-left: 1rem; padding-right: 1rem; }
+  .creator-actions { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+  .creator-actions .button { width: 100%; text-align: center; }
+  .creator-actions .button:only-child { grid-column: 1 / -1; }
+}
+
+/* Birthday style: festive header only; the video and AR rendering are unchanged. */
+.theme-tag { display: none; }
+.theme-birthday .overlay {
+  background:
+    radial-gradient(circle at 8% 30%, #ffd166 0 3px, transparent 4px),
+    radial-gradient(circle at 22% 75%, #ff6ad5 0 3px, transparent 4px),
+    radial-gradient(circle at 41% 18%, #4dd8ff 0 2px, transparent 3px),
+    radial-gradient(circle at 63% 64%, #7cfc9a 0 3px, transparent 4px),
+    radial-gradient(circle at 80% 22%, #ff6ad5 0 2px, transparent 3px),
+    radial-gradient(circle at 93% 70%, #ffd166 0 3px, transparent 4px),
+    linear-gradient(#2a0f2ecc, transparent);
+}
+.theme-birthday .theme-tag {
+  display: block;
+  width: 100%;
+  margin: 0;
+  color: #ffd166;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.theme-birthday .player-title {
+  background: linear-gradient(90deg, #ffd166, #ff6ad5);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.theme-birthday .hud-button.active { border-color: #ff6ad5; box-shadow: 0 0 0 1px #ff6ad5 inset; }

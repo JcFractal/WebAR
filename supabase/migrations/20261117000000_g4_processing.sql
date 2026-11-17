@@ -232,6 +232,21 @@ end $$;
 revoke all on function public.finish_processing(uuid, int, text, bigint, int, int, double precision) from public;
 grant execute on function public.finish_processing(uuid, int, text, bigint, int, int, double precision) to service_role;
 
+-- Clients may delete their own greetings (G3 policy), but not mid-processing: only the server delete cancels the
+-- provider request and keeps the job in the ledger as cancelled instead of an orphaned active job.
+create or replace function public.greetings_delete_guard() returns trigger language plpgsql set search_path = public as $$
+begin
+  if current_user in ('anon', 'authenticated') and exists (
+    select 1 from public.processing_jobs where greeting_id = old.id and state not in ('ready', 'failed', 'cancelled')
+  ) then
+    raise exception 'This greeting is still processing; delete it from the creator page.' using errcode = '55006';
+  end if;
+  return old;
+end $$;
+drop trigger if exists greetings_delete_guard on public.greetings;
+create trigger greetings_delete_guard before delete on public.greetings
+  for each row execute function public.greetings_delete_guard();
+
 -- Temporary processing files (normalized input, provider mattes): private, 50 MiB like the video bucket.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('greeting-work', 'greeting-work', false, 52428800, null)

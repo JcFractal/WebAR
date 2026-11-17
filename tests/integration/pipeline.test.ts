@@ -382,3 +382,19 @@ test('cancel while the submit is in flight cancels the provider request it retur
   assert.deepEqual(cancelled, [`mock-${j.idempotency_key}`]);
   assert.equal(after.provider_request_id, `mock-${j.idempotency_key}`);
 });
+
+test('a client delete cannot orphan an active job; the server delete cancels it', { skip }, async () => {
+  const { user, db } = people.a;
+  const id = await newOrdinary('a', 'Client delete');
+  const ctx = ctxFor(mockProvider());
+  const j = await startProcessing(ctx, user, id);
+  const r = await db.from('greetings').delete().eq('id', id);
+  assert.match(r.error?.message ?? '', /still processing/);
+  assert.ok((await greeting(id)), 'greeting kept');
+  await deleteGreeting(ctx, user, id);
+  assert.equal((await admin.from('processing_jobs').select('state').eq('id', j.id).single()).data!.state, 'cancelled');
+  const next = await newOrdinary('a', 'After delete');
+  const again = await startProcessing(ctx, user, next);
+  assert.equal(again.state, 'queued', 'creator slot is free again');
+  await cancelJob(ctx, user, again.id);
+});

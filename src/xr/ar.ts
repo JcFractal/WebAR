@@ -7,6 +7,16 @@ import * as THREE from 'three';
  */
 export type ArState = 'off' | 'starting' | 'searching' | 'ready' | 'placed';
 
+/** Wording for status messages, so each template names its own content and fallback. */
+export interface ArWording {
+  /** What gets placed, e.g. "sculpture". */
+  noun: string;
+  /** The non-AR view that keeps working, e.g. "fullscreen sculpture". */
+  fallback: string;
+}
+
+const SWARM_WORDING: ArWording = { noun: 'sculpture', fallback: 'fullscreen sculpture' };
+
 export async function isArSupported(): Promise<boolean> {
   try {
     return !!navigator.xr && (await navigator.xr.isSessionSupported('immersive-ar'));
@@ -31,6 +41,7 @@ export class ArPlacement {
     private readonly anchor: THREE.Object3D,
     private readonly overlayRoot: HTMLElement,
     private readonly heightAboveSurface: number,
+    private readonly wording: ArWording = SWARM_WORDING,
   ) {
     renderer.xr.enabled = true;
     renderer.xr.setReferenceSpaceType('local');
@@ -51,7 +62,7 @@ export class ArPlacement {
   async enter(): Promise<void> {
     if (this.session || this.state === 'starting') return;
     if (!navigator.xr) {
-      this.set('off', 'AR is not available in this browser. The fullscreen sculpture still works.');
+      this.set('off', `AR is not available in this browser. The ${this.wording.fallback} still works.`);
       return;
     }
     this.set('starting', 'Starting AR…');
@@ -63,7 +74,7 @@ export class ArPlacement {
         domOverlay: { root: this.overlayRoot },
       });
     } catch (err) {
-      this.set('off', `Could not start AR (${(err as Error).name || 'error'}). The fullscreen sculpture still works.`);
+      this.set('off', `Could not start AR (${(err as Error).name || 'error'}). The ${this.wording.fallback} still works.`);
       return;
     }
     this.session = session;
@@ -75,7 +86,7 @@ export class ArPlacement {
       this.hitSource = (await session.requestHitTestSource?.({ space: viewer })) ?? null;
       if (!this.hitSource) throw new Error('hit-test unavailable');
     } catch (err) {
-      this.failMessage = `AR started but surface detection failed (${(err as Error).message}). Back to the fullscreen sculpture.`;
+      this.failMessage = `AR started but surface detection failed (${(err as Error).message}). Back to the ${this.wording.fallback}.`;
       void session.end().catch(() => undefined);
       return;
     }
@@ -105,7 +116,7 @@ export class ArPlacement {
     if (pose) this.reticle.matrix.fromArray(pose.transform.matrix);
     const next = pose ? 'ready' : 'searching';
     if (next !== this.state) {
-      this.set(next, pose ? 'Tap to place the sculpture.' : 'Move your phone slowly to find a surface.');
+      this.set(next, pose ? `Tap to place the ${this.wording.noun}.` : 'Move your phone slowly to find a surface.');
     }
   }
 

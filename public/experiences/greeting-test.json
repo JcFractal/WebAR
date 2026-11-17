@@ -1,0 +1,14 @@
+{
+  "id": "greeting-test",
+  "template": "video",
+  "title": "Video greeting test",
+  "settings": {
+    "source": "media/synthetic-greeting.mp4",
+    "sourceNote": "Synthetic test clip (a drawn figure on green, not a real person). It checks loading, sound, keying and placement only, not real hair or edge quality.",
+    "displayHeightMeters": 1.2,
+    "bottomOffsetMeters": 0,
+    "loop": false,
+    "localFile": true,
+    "keying": { "mode": "opaque", "color": "#00b140", "tolerance": 0.25, "softness": 0.1, "spill": 0.5 }
+  }
+}

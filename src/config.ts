@@ -1,4 +1,4 @@
-export const TEMPLATES = ['swarm'] as const;
+export const TEMPLATES = ['swarm', 'video'] as const;
 export type TemplateId = (typeof TEMPLATES)[number];
 export const MOTION_PRESETS = ['garden', 'vortex'] as const;
 export type MotionPresetId = (typeof MOTION_PRESETS)[number];
@@ -114,6 +114,8 @@ const AUDIO_RANGES: Record<keyof AudioSettings, [number, number]> = {
 export interface ManifestEntry {
   id: string;
   title: string;
+  /** Test fixtures are listed in a separate gallery section, never mixed with the demo cards. */
+  test?: boolean;
 }
 
 export interface SwarmSettings {
@@ -127,13 +129,88 @@ export interface SwarmSettings {
   swarm?: Partial<SwarmTuning>;
 }
 
-export interface ExperienceConfig {
+export const KEY_MODES = ['opaque', 'chroma'] as const;
+export type KeyMode = (typeof KEY_MODES)[number];
+
+/** Chroma keying in display (sRGB) space; distances are in the CbCr plane. */
+export interface KeyingSettings {
+  mode: KeyMode;
+  color: string;
+  /** CbCr distance from the key color that is fully transparent. */
+  tolerance: number;
+  /** Extra distance over which alpha ramps to opaque (soft edges). */
+  softness: number;
+  /** How strongly key-colored fringes are desaturated (0 = off). */
+  spill: number;
+}
+
+export const KEYING_DEFAULTS: KeyingSettings = {
+  mode: 'opaque',
+  color: '#00b140',
+  tolerance: 0.25,
+  softness: 0.1,
+  spill: 0.5,
+};
+
+const KEYING_RANGES: Record<'tolerance' | 'softness' | 'spill', [number, number]> = {
+  tolerance: [0, 1],
+  softness: [0, 0.5],
+  spill: [0, 1],
+};
+
+/** Resolved video settings; JSON may omit any field except where noted in `validateVideoSettings`. */
+export interface VideoDefaults {
+  displayHeightMeters: number;
+  bottomOffsetMeters: number;
+  loop: boolean;
+  localFile: boolean;
+}
+
+export const VIDEO_DEFAULTS: VideoDefaults = {
+  displayHeightMeters: 1.2,
+  bottomOffsetMeters: 0,
+  loop: false,
+  localFile: false,
+};
+
+export const VIDEO_RANGES: Record<'displayHeightMeters' | 'bottomOffsetMeters', [number, number]> = {
+  displayHeightMeters: [0.25, 2.5],
+  bottomOffsetMeters: [0, 2],
+};
+
+/** Same-origin static media only; no arbitrary URLs. */
+export const VIDEO_SOURCE_PATTERN = /^media\/[a-z0-9]+(?:-[a-z0-9]+)*\.mp4$/;
+
+export interface VideoSettings {
+  /** Path under public/, e.g. "media/synthetic-greeting.mp4". Optional when `localFile` is true. */
+  source?: string;
+  /** Shown under the title, e.g. to label a synthetic fixture. */
+  sourceNote?: string;
+  displayHeightMeters?: number;
+  bottomOffsetMeters?: number;
+  loop?: boolean;
+  /** Offer the temporary on-device MP4 selector. */
+  localFile?: boolean;
+  keying?: Partial<KeyingSettings>;
+}
+
+interface BaseExperienceConfig {
   id: string;
-  template: TemplateId;
   title: string;
-  settings: SwarmSettings;
   brand?: { name?: string; accent?: string };
 }
+
+export interface SwarmExperienceConfig extends BaseExperienceConfig {
+  template: 'swarm';
+  settings: SwarmSettings;
+}
+
+export interface VideoExperienceConfig extends BaseExperienceConfig {
+  template: 'video';
+  settings: VideoSettings;
+}
+
+export type ExperienceConfig = SwarmExperienceConfig | VideoExperienceConfig;
 
 export type LoadErrorKind = 'invalid-id' | 'unknown-id' | 'fetch-failed' | 'invalid-config';
 
@@ -188,9 +265,9 @@ export async function loadManifest(): Promise<ManifestEntry[]> {
   if (!isObject(data) || !Array.isArray(data.experiences)) {
     throw new ExperienceLoadError('invalid-config', 'The experience list (manifest.json) is malformed.');
   }
-  return data.experiences.filter(
-    (e): e is ManifestEntry => isObject(e) && typeof e.id === 'string' && isValidId(e.id) && isNonEmptyString(e.title),
-  );
+  return data.experiences
+    .filter((e): e is ManifestEntry => isObject(e) && typeof e.id === 'string' && isValidId(e.id) && isNonEmptyString(e.title))
+    .map((e) => ({ id: e.id, title: e.title, ...(e.test === true ? { test: true } : {}) }));
 }
 
 export function validateExperience(data: unknown, expectedId: string): ExperienceConfig {
@@ -205,31 +282,10 @@ export function validateExperience(data: unknown, expectedId: string): Experienc
   const s = data.settings;
   if (!isObject(s)) {
     problems.push('"settings" must be an object');
+  } else if (data.template === 'video') {
+    validateVideoSettings(s, problems);
   } else {
-    const count = s.particleCount;
-    if (typeof count !== 'number' || !Number.isInteger(count) || count < 1 || count > MAX_PARTICLES) {
-      problems.push(`"settings.particleCount" must be an integer from 1 to ${MAX_PARTICLES}`);
-    }
-    if (!Array.isArray(s.palette) || s.palette.length === 0 || !s.palette.every((c) => typeof c === 'string' && HEX_COLOR.test(c))) {
-      problems.push('"settings.palette" must be a non-empty list of #RRGGBB colors');
-    }
-    if (!MOTION_PRESETS.includes(s.motionPreset as MotionPresetId)) {
-      problems.push(`"settings.motionPreset" must be one of: ${MOTION_PRESETS.join(', ')}`);
-    }
-    if (!FORMATIONS.includes(s.formation as FormationId)) {
-      problems.push(`"settings.formation" must be one of: ${FORMATIONS.join(', ')}`);
-    }
-    if (!isPositiveNumber(s.diameterMeters)) problems.push('"settings.diameterMeters" must be a positive number');
-    if (typeof s.heightAboveSurfaceMeters !== 'number' || !Number.isFinite(s.heightAboveSurfaceMeters)) {
-      problems.push('"settings.heightAboveSurfaceMeters" must be a number');
-    }
-    if (s.audio !== undefined) checkRanges('settings.audio', s.audio, AUDIO_RANGES, problems);
-    if (isObject(s.audio)) {
-      const enter = (s.audio.enterThreshold as number | undefined) ?? AUDIO_DEFAULTS.enterThreshold;
-      const exit = (s.audio.exitThreshold as number | undefined) ?? AUDIO_DEFAULTS.exitThreshold;
-      if (exit >= enter) problems.push('"settings.audio.exitThreshold" must be lower than "enterThreshold"');
-    }
-    if (s.swarm !== undefined) checkRanges('settings.swarm', s.swarm, SWARM_RANGES, problems);
+    validateSwarmSettings(s, problems);
   }
 
   if (data.brand !== undefined && !isObject(data.brand)) problems.push('"brand" must be an object when present');
@@ -263,6 +319,81 @@ function checkRanges(path: string, value: unknown, ranges: Record<string, [numbe
       problems.push(`"${path}.${key}" is not a known setting`);
     } else if (typeof v !== 'number' || !Number.isFinite(v) || v < range[0] || v > range[1]) {
       problems.push(`"${path}.${key}" must be a number from ${range[0]} to ${range[1]}`);
+    }
+  }
+}
+
+function validateSwarmSettings(s: Record<string, unknown>, problems: string[]): void {
+  const count = s.particleCount;
+  if (typeof count !== 'number' || !Number.isInteger(count) || count < 1 || count > MAX_PARTICLES) {
+    problems.push(`"settings.particleCount" must be an integer from 1 to ${MAX_PARTICLES}`);
+  }
+  if (!Array.isArray(s.palette) || s.palette.length === 0 || !s.palette.every((c) => typeof c === 'string' && HEX_COLOR.test(c))) {
+    problems.push('"settings.palette" must be a non-empty list of #RRGGBB colors');
+  }
+  if (!MOTION_PRESETS.includes(s.motionPreset as MotionPresetId)) {
+    problems.push(`"settings.motionPreset" must be one of: ${MOTION_PRESETS.join(', ')}`);
+  }
+  if (!FORMATIONS.includes(s.formation as FormationId)) {
+    problems.push(`"settings.formation" must be one of: ${FORMATIONS.join(', ')}`);
+  }
+  if (!isPositiveNumber(s.diameterMeters)) problems.push('"settings.diameterMeters" must be a positive number');
+  if (typeof s.heightAboveSurfaceMeters !== 'number' || !Number.isFinite(s.heightAboveSurfaceMeters)) {
+    problems.push('"settings.heightAboveSurfaceMeters" must be a number');
+  }
+  if (s.audio !== undefined) checkRanges('settings.audio', s.audio, AUDIO_RANGES, problems);
+  if (isObject(s.audio)) {
+    const enter = (s.audio.enterThreshold as number | undefined) ?? AUDIO_DEFAULTS.enterThreshold;
+    const exit = (s.audio.exitThreshold as number | undefined) ?? AUDIO_DEFAULTS.exitThreshold;
+    if (exit >= enter) problems.push('"settings.audio.exitThreshold" must be lower than "enterThreshold"');
+  }
+  if (s.swarm !== undefined) checkRanges('settings.swarm', s.swarm, SWARM_RANGES, problems);
+}
+
+const VIDEO_KEYS = new Set(['source', 'sourceNote', 'displayHeightMeters', 'bottomOffsetMeters', 'loop', 'localFile', 'keying']);
+const KEYING_KEYS = new Set(['mode', 'color', 'tolerance', 'softness', 'spill']);
+
+export function validateVideoSettings(s: Record<string, unknown>, problems: string[]): void {
+  for (const key of Object.keys(s)) {
+    if (!VIDEO_KEYS.has(key)) problems.push(`"settings.${key}" is not a known video setting`);
+  }
+  if (s.source !== undefined && (typeof s.source !== 'string' || !VIDEO_SOURCE_PATTERN.test(s.source))) {
+    problems.push('"settings.source" must be a path like "media/<name>.mp4" (same-origin MP4 only)');
+  }
+  if (s.sourceNote !== undefined && (typeof s.sourceNote !== 'string' || s.sourceNote.length > 200)) {
+    problems.push('"settings.sourceNote" must be a string of at most 200 characters');
+  }
+  for (const [key, [min, max]] of Object.entries(VIDEO_RANGES)) {
+    const v = s[key];
+    if (v !== undefined && (typeof v !== 'number' || !Number.isFinite(v) || v < min || v > max)) {
+      problems.push(`"settings.${key}" must be a number from ${min} to ${max}`);
+    }
+  }
+  for (const key of ['loop', 'localFile'] as const) {
+    if (s[key] !== undefined && typeof s[key] !== 'boolean') problems.push(`"settings.${key}" must be true or false`);
+  }
+  if (s.source === undefined && s.localFile !== true) {
+    problems.push('"settings.source" is required unless "settings.localFile" is true');
+  }
+  const k = s.keying;
+  if (k === undefined) return;
+  if (!isObject(k)) {
+    problems.push('"settings.keying" must be an object when present');
+    return;
+  }
+  for (const key of Object.keys(k)) {
+    if (!KEYING_KEYS.has(key)) problems.push(`"settings.keying.${key}" is not a known setting`);
+  }
+  if (k.mode !== undefined && !KEY_MODES.includes(k.mode as KeyMode)) {
+    problems.push(`"settings.keying.mode" must be one of: ${KEY_MODES.join(', ')}`);
+  }
+  if (k.color !== undefined && (typeof k.color !== 'string' || !HEX_COLOR.test(k.color))) {
+    problems.push('"settings.keying.color" must be a #RRGGBB color');
+  }
+  for (const [key, [min, max]] of Object.entries(KEYING_RANGES)) {
+    const v = k[key];
+    if (v !== undefined && (typeof v !== 'number' || !Number.isFinite(v) || v < min || v > max)) {
+      problems.push(`"settings.keying.${key}" must be a number from ${min} to ${max}`);
     }
   }
 }

@@ -18,6 +18,7 @@ test('next action follows the stage order', () => {
   assert.equal(nextAction(job({}), NOW), 'normalize');
   assert.equal(nextAction(job({ state: 'normalized' }), NOW), 'submit');
   assert.equal(nextAction(job({ state: 'matte_ready' }), NOW), 'pack');
+  assert.equal(nextAction(job({ state: 'matte_ready', lease_until: new Date(NOW + 30_000).toISOString() }), NOW), 'wait', 'pack retries back off');
   for (const s of ['ready', 'failed', 'cancelled'] as const) assert.equal(nextAction(job({ state: s }), NOW), 'none');
 });
 
@@ -159,6 +160,10 @@ test('fal adapter: status polling and webhook parsing', async () => {
     { state: 'completed', maskUrl: 'https://cdn/mask.mov', inferenceSeconds: 56.2 });
   const queued = fakeFetch(() => Response.json({ status: 'IN_QUEUE' }));
   assert.deepEqual(await falProvider('k', queued.f).status('r1', {}), { state: 'pending' });
+  for (const status of ['FAILED', 'CANCELED']) {
+    const ended = fakeFetch(() => Response.json({ status }));
+    assert.equal((await falProvider('k', ended.f).status('r1', {})).state, 'failed', `${status} is final, not pending`);
+  }
   const flaky = fakeFetch(() => new Response('', { status: 503 }));
   assert.deepEqual(await falProvider('k', flaky.f).status('r1', {}), { state: 'pending' });
   const p = falProvider('k');

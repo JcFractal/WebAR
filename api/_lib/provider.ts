@@ -70,7 +70,8 @@ export function falProvider(key: string, f: Fetch = fetch): Provider {
       const s = await f(urls.status ?? `${base}/status`, { headers: auth, signal: AbortSignal.timeout(15_000) });
       if (!s.ok) return s.status === 404 ? { state: 'failed', error: 'request-not-found' } : { state: 'pending' };
       const st = (await s.json()) as { status?: string; metrics?: { inference_time?: number } };
-      if (st.status !== 'COMPLETED') return { state: 'pending' };
+      if (!st.status || st.status === 'IN_QUEUE' || st.status === 'IN_PROGRESS') return { state: 'pending' };
+      if (st.status !== 'COMPLETED') return { state: 'failed', error: `provider status ${st.status}` };
       const r = await f(urls.response ?? base, { headers: auth, signal: AbortSignal.timeout(15_000) });
       const body = (await r.json().catch(() => null)) as unknown;
       const mask = r.ok ? maskOf(body) : undefined;

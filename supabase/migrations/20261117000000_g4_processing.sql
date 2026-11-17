@@ -32,7 +32,8 @@ alter table public.processing_settings enable row level security;
 
 create table if not exists public.processing_jobs (
   id uuid primary key default gen_random_uuid(),
-  greeting_id uuid not null references public.greetings (id) on delete cascade,
+  -- set null, not cascade: a deleted greeting's jobs stay in the budget/quota ledger.
+  greeting_id uuid references public.greetings (id) on delete set null,
   owner_id uuid not null references auth.users (id) on delete cascade,
   attempt int not null check (attempt >= 1),
   state text not null default 'queued' check (state in
@@ -114,11 +115,11 @@ begin
     new.id := old.id;
     new.owner_id := old.owner_id;
     new.slug := old.slug;
-    new.video_path := old.video_path;
     new.source_kind := old.source_kind;
     new.source_path := old.source_path;
     new.created_at := old.created_at;
     if not trusted then
+      new.video_path := old.video_path;
       new.media_state := old.media_state;
       new.media_error := old.media_error;
       new.media_checked_at := old.media_checked_at;
@@ -188,6 +189,9 @@ begin
   end if;
   if not s.enabled then
     return query select false, 'processing-disabled'::text, 0::numeric; return;
+  end if;
+  if not public.creator_ok(j.owner_id) then
+    return query select false, 'not-creator'::text, 0::numeric; return;
   end if;
   est := round(greatest(s.min_reserve_usd, video_seconds::numeric * s.reserve_usd_per_video_second), 4);
   select coalesce(sum(case when state in ('ready', 'failed', 'cancelled') then coalesce(cost_usd, 0)

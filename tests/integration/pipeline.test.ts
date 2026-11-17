@@ -289,7 +289,7 @@ test('provider failure and refusal fail cleanly; cancel stops a job; ownership i
   assert.equal((await greeting(id)).media_state, 'failed');
 });
 
-test('delete removes the greeting, its jobs and every file', { skip }, async () => {
+test('delete removes the greeting and every file; its job stays in the ledger, cancelled', { skip }, async () => {
   const { user } = people.a;
   const id = await newOrdinary('a', 'Delete me');
   const ctx = ctxFor(mockProvider());
@@ -299,10 +299,12 @@ test('delete removes the greeting, its jobs and every file', { skip }, async () 
   const g = await greeting(id);
   await deleteGreeting(ctx, user, id);
   assert.equal(await greeting(id), null);
-  assert.equal((await admin.from('processing_jobs').select('id').eq('greeting_id', id)).data!.length, 0);
+  const kept = (await admin.from('processing_jobs').select('state,greeting_id').eq('id', j.id).single()).data!;
+  assert.deepEqual(kept, { state: 'cancelled', greeting_id: null }, 'deleting must not reset budget or quota');
   assert.ok(!(await exists(VIDEOS, g.source_path)));
   assert.ok(!(await exists(WORK, `${id}/normalized.mp4`)));
-  assert.equal((await handleWebhook(ctx, j.id, 1, 'x', { state: 'completed', maskUrl: 'mock:' })).result, 'ignored');
+  assert.notEqual((await handleWebhook(ctx, j.id, 1, 'x', { state: 'completed', maskUrl: 'mock:' })).result, 'applied');
+  assert.equal((await admin.from('processing_jobs').select('state').eq('id', j.id).single()).data!.state, 'cancelled');
 });
 
 test('50 MiB: storage refuses larger uploads; server downloads stop at the limit; bad sources are refused', { skip }, async () => {
@@ -337,4 +339,46 @@ test('webhook endpoint rejects unsigned calls', { skip }, async () => {
   const { POST } = await import('../../api/fal-webhook.ts');
   const res = await POST(new Request('http://localhost/api/fal-webhook?job=00000000-0000-0000-0000-000000000000&attempt=1', { method: 'POST', body: '{"request_id":"x","status":"OK"}' }));
   assert.equal(res.status, 401);
+});
+
+test('revoked after start: the queued job is refused at reservation, before any submit', { skip }, async () => {
+  const { user, email } = people.a;
+  const id = await newOrdinary('a', 'Revoke mid-job');
+  let submits = 0;
+  const base = mockProvider();
+  const ctx = ctxFor({ ...base, submit: async (i) => (submits++, base.submit(i)) });
+  const j = await startProcessing(ctx, user, id);
+  assert.equal((await tick(ctx, user, j.id)).state, 'normalized');
+  await admin.from('creator_emails').delete().eq('email', email);
+  try {
+    const after = await tick(ctx, user, j.id);
+    assert.equal(after.state, 'failed');
+    assert.equal(after.error_code, 'not-creator');
+    assert.equal(submits, 0);
+  } finally {
+    await admin.from('creator_emails').insert({ email });
+  }
+});
+
+test('cancel while the submit is in flight cancels the provider request it returns', { skip }, async () => {
+  const { user } = people.a;
+  const id = await newOrdinary('a', 'Cancel mid-submit');
+  const cancelled: string[] = [];
+  const base = mockProvider();
+  let jobId = '';
+  const ctx: Ctx = ctxFor({
+    ...base,
+    submit: async (i) => {
+      await cancelJob(ctx, user, jobId);
+      return base.submit(i);
+    },
+    cancel: async (rid) => void cancelled.push(rid),
+  });
+  const j = await startProcessing(ctx, user, id);
+  jobId = j.id;
+  await tick(ctx, user, j.id);
+  const after = await tick(ctx, user, j.id);
+  assert.equal(after.state, 'cancelled');
+  assert.deepEqual(cancelled, [`mock-${j.idempotency_key}`]);
+  assert.equal(after.provider_request_id, `mock-${j.idempotency_key}`);
 });

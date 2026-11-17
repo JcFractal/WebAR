@@ -38,7 +38,7 @@ export class HttpError extends Error {
 
 export interface Job {
   id: string;
-  greeting_id: string;
+  greeting_id: string | null;
   owner_id: string;
   attempt: number;
   state: JobState;
@@ -116,7 +116,8 @@ async function transition(ctx: Ctx, job: Job, patch: Partial<Job> & Record<strin
   return data as Job | null;
 }
 
-async function setGreeting(ctx: Ctx, id: string, patch: Record<string, unknown>): Promise<void> {
+async function setGreeting(ctx: Ctx, id: string | null, patch: Record<string, unknown>): Promise<void> {
+  if (!id) return;
   const { error } = await ctx.db.from('greetings').update(patch).eq('id', id);
   if (error) throw error;
 }
@@ -243,6 +244,7 @@ export async function tick(ctx: Ctx, user: User | null, jobId: string): Promise<
         'daily-budget': "Today's background-removal budget is used up. Try again tomorrow.",
         'creator-quota': "You've reached today's limit of processing attempts. Try again tomorrow.",
         'processing-disabled': 'Automatic background removal is switched off right now.',
+        'not-creator': 'This account is not enabled for creating greetings anymore.',
       };
       const latest = await loadJob(ctx, job.id);
       return after(latest && (await fail(ctx, latest, res?.reason ?? 'reserve-failed', msg[res?.reason ?? ''] ?? 'Processing could not start.', 0)));
@@ -256,8 +258,15 @@ export async function tick(ctx: Ctx, user: User | null, jobId: string): Promise<
         webhookUrl: `${ctx.webhookBase}/api/fal-webhook?job=${reserved.id}&attempt=${reserved.attempt}`,
         idempotencyKey: reserved.idempotency_key,
       });
-      // If a webhook already adopted the request, this conditional update is a no-op.
-      return after(await transition(ctx, reserved, { state: 'submitted', provider_request_id: sub.requestId, provider_urls: sub.urls, submit_uncertain: false, error_code: null }));
+      const moved = await transition(ctx, reserved, { state: 'submitted', provider_request_id: sub.requestId, provider_urls: sub.urls, submit_uncertain: false, error_code: null });
+      if (moved) return after(moved);
+      // A webhook adopted it (same id, keep going) or the job was cancelled/deleted while submitting: stop the paid request.
+      const cur = await loadJob(ctx, reserved.id);
+      if (!cur || (TERMINAL.includes(cur.state) && cur.provider_request_id !== sub.requestId)) {
+        await ctx.provider.cancel(sub.requestId, sub.urls);
+        if (cur && !cur.provider_request_id) await transition(ctx, cur, { provider_request_id: sub.requestId, provider_urls: sub.urls });
+      }
+      return after(null);
     } catch (err) {
       const e = err instanceof SubmitError ? err : new SubmitError(String(err), 'uncertain', 'submit-error');
       console.error('submit', job.id, e.certainty, e.message);
@@ -292,7 +301,7 @@ export async function tick(ctx: Ctx, user: User | null, jobId: string): Promise<
     const dir = workDir();
     let uploadedTo: string | null = null;
     try {
-      const g = (await ctx.db.from('greetings').select('video_path').eq('id', job.greeting_id).single()).data as { video_path: string };
+      const g = (await ctx.db.from('greetings').select('owner_id').eq('id', job.greeting_id).single()).data as { owner_id: string };
       const norm = join(dir, 'normalized.mp4');
       await fetchObject(ctx, WORK, mine.normalized_path!, norm);
       const n = await probe(norm);
@@ -303,25 +312,36 @@ export async function tick(ctx: Ctx, user: User | null, jobId: string): Promise<
       const { info, check } = await pack(norm, mine.mask_url === 'mock:' ? mask + '.mp4' : mask, out, dir);
       const bytes = statSync(out).size;
       if (!packOk(check) || bytes > MAX_BYTES) throw new Error(`packed output failed validation: ${JSON.stringify({ ...check, bytes })}`);
-      await putObject(ctx, VIDEOS, g.video_path, out);
-      uploadedTo = g.video_path;
-      const done = await transition(ctx, mine, { state: 'ready', lease_until: null, finished_at: iso(now(ctx)), error_code: null, user_message: null });
-      if (!done) {
-        // Cancelled or deleted meanwhile: do not resurrect it.
-        await ctx.db.storage.from(VIDEOS).remove([g.video_path]);
-        return after(null);
-      }
+      // Per-attempt path: a cancelled older attempt can never overwrite or delete a newer one's cutout.
+      const path = `${g.owner_id}/${job.greeting_id}-cutout-${mine.attempt}.mp4`;
+      await putObject(ctx, VIDEOS, path, out);
+      uploadedTo = path;
+      // Greeting first, then the job: if the job update is lost, the next try repeats both.
       await setGreeting(ctx, job.greeting_id, {
         media_state: 'ready', media_error: null, media_checked_at: iso(now(ctx)), video_format: 'packed', video_mime: 'video/mp4',
-        video_bytes: bytes, video_width: info.width, video_height: info.height, video_duration: info.duration,
+        video_path: path, video_bytes: bytes, video_width: info.width, video_height: info.height, video_duration: info.duration,
       });
-      await cleanup(ctx, job.greeting_id, true);
+      const done = await transition(ctx, mine, { state: 'ready', lease_until: null, finished_at: iso(now(ctx)), error_code: null, user_message: null });
+      if (!done) {
+        // Cancelled or deleted meanwhile: undo this attempt only (the greeting may point at a newer one by now).
+        const cur = await loadJob(ctx, job.id);
+        const undo = await ctx.db.from('greetings').update({ media_state: 'failed', media_error: cur?.user_message ?? 'Processing was cancelled.', video_path: `${g.owner_id}/${job.greeting_id}.mp4` })
+          .eq('id', job.greeting_id).eq('video_path', path);
+        if (undo.error) throw undo.error;
+        await ctx.db.storage.from(VIDEOS).remove([path]);
+        return after(null);
+      }
+      await cleanup(ctx, job.greeting_id!, true);
       return after(done);
     } catch (err) {
       console.error('pack', job.id, err);
-      if (uploadedTo && !(await loadJob(ctx, job.id))) await ctx.db.storage.from(VIDEOS).remove([uploadedTo]);
+      if (uploadedTo) {
+        const cur = await ctx.db.from('greetings').select('video_path').eq('id', job.greeting_id).maybeSingle();
+        if (!cur.error && cur.data?.video_path !== uploadedTo) await ctx.db.storage.from(VIDEOS).remove([uploadedTo]);
+      }
       if (mine.step_tries >= LIMITS.maxStepTries) return after(await fail(ctx, mine, 'pack-failed', 'The cutout could not be finished. You can try again.', mine.cost_usd));
-      return after(await transition(ctx, mine, { state: 'matte_ready', lease_until: null, error_code: 'pack-retry' }));
+      // Back off (30 s, 60 s): a just-completed provider output can take a moment to appear on its CDN.
+      return after(await transition(ctx, mine, { state: 'matte_ready', lease_until: iso(t + LIMITS.packRetrySeconds * 1000 * mine.step_tries), error_code: 'pack-retry' }));
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -370,16 +390,31 @@ export async function cancelJob(ctx: Ctx, user: User, jobId: string): Promise<Jo
   return done;
 }
 
-/** Delete a greeting with all its files, cancelling any provider request first. */
+/** Delete a greeting with all its files. Its jobs stay in the ledger (cancelled) so spend and quota still count. */
 export async function deleteGreeting(ctx: Ctx, user: User, greetingId: string): Promise<void> {
   const g = await ownGreeting(ctx, user, greetingId);
-  const active = await ctx.db.from('processing_jobs').select('*').eq('greeting_id', g.id).not('state', 'in', `(${TERMINAL.join(',')})`);
-  for (const j of (active.data ?? []) as Job[]) if (j.provider_request_id) await ctx.provider.cancel(j.provider_request_id, j.provider_urls ?? {});
+  for (let round = 0; ; round++) {
+    const active = await ctx.db.from('processing_jobs').select('*').eq('greeting_id', g.id).not('state', 'in', `(${TERMINAL.join(',')})`);
+    if (active.error) throw active.error;
+    const jobs = active.data as Job[];
+    if (!jobs.length) break;
+    if (round >= 3) throw new HttpError(409, 'changed', 'Processing is busy; try deleting again in a moment.');
+    for (const j of jobs) {
+      if (j.provider_request_id) await ctx.provider.cancel(j.provider_request_id, j.provider_urls ?? {});
+      const cost = j.provider === 'mock' || !PAID.includes(j.state) ? 0 : (j.cost_usd ?? Number(j.reserved_usd));
+      await transition(ctx, j, { state: 'cancelled', lease_until: null, error_code: 'deleted', user_message: 'The greeting was deleted.', cost_usd: cost, finished_at: iso(now(ctx)) });
+    }
+  }
+  // Files first: if removal fails the greeting stays, so the creator can retry instead of leaving videos behind.
+  const listed = await ctx.db.storage.from(VIDEOS).list(g.owner_id, { search: g.id, limit: 100 });
+  if (listed.error) throw listed.error;
+  const paths = new Set([g.video_path, g.source_path, ...listed.data.map((o) => `${g.owner_id}/${o.name}`)].filter((p): p is string => !!p));
+  const rm = await ctx.db.storage.from(VIDEOS).remove([...paths]);
+  if (rm.error) throw rm.error;
+  const rmWork = await ctx.db.storage.from(WORK).remove([`${g.id}/normalized.mp4`]);
+  if (rmWork.error) throw rmWork.error;
   const del = await ctx.db.from('greetings').delete().eq('id', g.id);
   if (del.error) throw del.error;
-  const paths = [g.video_path, g.source_path].filter((p): p is string => !!p);
-  await ctx.db.storage.from(VIDEOS).remove(paths);
-  await ctx.db.storage.from(WORK).remove([`${g.id}/normalized.mp4`]);
 }
 
 /** G3 path: check an already-processed upload on the server and record trusted metadata. */

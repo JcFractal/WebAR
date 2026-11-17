@@ -18,6 +18,7 @@ export const LIMITS = {
   /** A crashed submit (no outcome recorded) is treated as uncertain after this. */
   submitStaleSeconds: 60,
   pollEverySeconds: 15,
+  packRetrySeconds: 30,
   /** A confirmed provider request that never finishes is cancelled and failed after this. */
   submittedSeconds: 60 * 60,
 };
@@ -60,7 +61,7 @@ export function nextAction(j: JobView, now: number): Action {
       if (secs(j.submit_started_at, now) >= LIMITS.submittedSeconds) return 'give-up-submitted';
       return secs(j.last_polled_at, now) >= LIMITS.pollEverySeconds ? 'poll' : 'wait';
     case 'matte_ready':
-      return 'pack';
+      return leased(j, now) ? 'wait' : 'pack';
     default:
       return 'none';
   }

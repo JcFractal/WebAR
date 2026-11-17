@@ -25,6 +25,8 @@ export async function isArSupported(): Promise<boolean> {
   }
 }
 
+const SEARCHING = 'Point your phone at the floor and move it slowly until a ring appears.';
+
 export class ArPlacement {
   state: ArState = 'off';
   onChange: (state: ArState, message: string) => void = () => undefined;
@@ -91,13 +93,13 @@ export class ArPlacement {
       return;
     }
     this.anchor.visible = false;
-    this.set('searching', 'Move your phone slowly to find a surface.');
+    this.set('searching', SEARCHING);
   }
 
   reset(): void {
     if (!this.session) return;
     this.anchor.visible = false;
-    this.set('searching', 'Move your phone slowly to find a surface.');
+    this.set('searching', SEARCHING);
   }
 
   exit(): void {
@@ -116,7 +118,7 @@ export class ArPlacement {
     if (pose) this.reticle.matrix.fromArray(pose.transform.matrix);
     const next = pose ? 'ready' : 'searching';
     if (next !== this.state) {
-      this.set(next, pose ? `Tap to place the ${this.wording.noun}.` : 'Move your phone slowly to find a surface.');
+      this.set(next, pose ? `Tap the screen to place the ${this.wording.noun} on the ring.` : SEARCHING);
     }
   }
 
@@ -137,7 +139,7 @@ export class ArPlacement {
     this.anchor.position.set(this.tmpPos.x, this.tmpPos.y + this.heightAboveSurface, this.tmpPos.z);
     this.anchor.rotation.set(0, Math.atan2(this.tmpCam.x - this.tmpPos.x, this.tmpCam.z - this.tmpPos.z), 0);
     this.anchor.visible = true;
-    this.set('placed', 'Placed. Walk around it; use Reset placement to move it.');
+    this.set('placed', 'Placed. Step back to see it all, walk around it, or tap Reset placement to move it.');
   };
 
   private readonly handleEnd = () => {

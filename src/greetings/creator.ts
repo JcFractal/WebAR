@@ -58,11 +58,26 @@ function probe(file: File): Promise<{ width: number; height: number; duration: n
   });
 }
 
+const STEPS_ORDINARY = [
+  'Upload a short video of yourself (3–30 seconds).',
+  'We remove the background automatically. This takes about 2 minutes.',
+  'Preview your private draft.',
+  'Publish to get a link and QR code. Anyone with them can place your greeting in their room.',
+];
+const STEPS_PREPARED = [
+  'Upload a processed cutout video.',
+  'Preview your private draft.',
+  'Publish to get a link and QR code. Anyone with them can place your greeting in their room.',
+];
+
 /** Creator route `?create`: sign in, upload a processed cutout, save a draft, publish/unpublish, QR. */
 export async function showCreator(app: HTMLElement): Promise<void> {
   document.title = 'Create a greeting · JC Fractal WebAR';
   const page = el('main', 'page creator');
   page.append(el('p', 'eyebrow', 'JC Fractal'), el('h1', undefined, 'Your AR greetings'));
+  const steps = el('ol', 'creator-steps');
+  for (const s of ORDINARY ? STEPS_ORDINARY : STEPS_PREPARED) steps.append(el('li', undefined, s));
+  page.append(steps);
   const body = el('div');
   page.append(body);
   app.replaceChildren(page);
@@ -102,7 +117,14 @@ function signIn(rerender: () => Promise<void>): HTMLElement {
   const create = btn('Create account', 'button secondary');
   const status = el('p', 'muted');
   status.setAttribute('role', 'status');
-  form.append(el('h2', 'gallery-section', 'Sign in to create greetings'), email, password, el('div', 'creator-actions'), status);
+  form.append(
+    el('h2', 'gallery-section', 'Sign in to create greetings'),
+    email,
+    password,
+    el('div', 'creator-actions'),
+    status,
+    el('p', 'muted small', 'New here? Enter your email and a password, tap Create account, then open the confirmation email and sign in.'),
+  );
   form.querySelector('.creator-actions')!.append(submit, create);
 
   const run = async (mode: 'in' | 'up') => {
@@ -154,7 +176,7 @@ async function signedIn(session: Session, rerender: () => Promise<void>): Promis
       const cards = await Promise.all(rows.map((g) => card(g, refresh)));
       // Overlapping refreshes (upload, processing loops) must not let an older list overwrite a newer one.
       if (mine !== generation) return;
-      listStatus.textContent = rows.length ? '' : 'No greetings yet. Upload a processed cutout above.';
+      listStatus.textContent = rows.length ? '' : `No greetings yet. Upload ${ORDINARY ? 'a video' : 'a processed cutout'} above to make your first one.`;
       list.replaceChildren(...cards);
     } catch (err) {
       listStatus.className = 'error-text';
@@ -172,7 +194,9 @@ function uploadForm(session: Session, refresh: () => Promise<void>): HTMLElement
   const title = el('input');
   title.required = true;
   title.maxLength = 80;
-  title.placeholder = 'Greeting title, e.g. Happy birthday, Ana!';
+  title.placeholder = 'e.g. Happy birthday, Ana!';
+  const titleLabel = el('label', 'creator-label', 'Title (shown on the greeting)');
+  titleLabel.append(title);
   const file = el('input');
   file.type = 'file';
   file.required = true;
@@ -192,7 +216,7 @@ function uploadForm(session: Session, refresh: () => Promise<void>): HTMLElement
   const syncKind = () => {
     const ordinary = kind.value === 'ordinary';
     formatLabel.hidden = ordinary;
-    fileLabel.firstChild!.textContent = ordinary ? 'Recording (3–30 s, up to 50 MiB)' : 'Processed video';
+    fileLabel.firstChild!.textContent = ordinary ? 'Your video (3–30 seconds, up to 50 MB; 1080p recommended)' : 'Processed video';
   };
   kind.addEventListener('change', syncKind);
   syncKind();
@@ -208,13 +232,13 @@ function uploadForm(session: Session, refresh: () => Promise<void>): HTMLElement
   cancel.hidden = true;
   const actions = el('div', 'creator-actions');
   actions.append(save, cancel);
-  form.append(el('h2', 'gallery-section', 'New greeting'), title, kindLabel, fileLabel, formatLabel, progress, status, actions);
+  form.append(el('h2', 'gallery-section', 'New greeting'), titleLabel, kindLabel, fileLabel, formatLabel, progress, status, actions);
 
   file.addEventListener('change', () => {
     const f = file.files?.[0];
     if (f) format.value = suggestedFormat(f);
     status.className = 'muted';
-    status.textContent = f ? `${f.name} · ${(f.size / 1048576).toFixed(1)} MiB` : '';
+    status.textContent = f ? `${f.name} · ${(f.size / 1048576).toFixed(1)} MB` : '';
   });
 
   let controller: AbortController | null = null;
@@ -253,9 +277,9 @@ function uploadForm(session: Session, refresh: () => Promise<void>): HTMLElement
       const fresh = (await currentSession()) ?? session;
       await uploadVideo(fresh, path, f, mime, (p) => {
         progress.value = p;
-        status.textContent = `Uploading… ${Math.round(p * 100)}%`;
+        status.textContent = `Uploading… ${Math.round(p * 100)}%. Keep this page open until the upload finishes.`;
       }, controller.signal);
-      status.textContent = 'Saving draft…';
+      status.textContent = 'Upload finished. Saving your draft…';
       try {
         await createGreeting({
           id,
@@ -277,26 +301,27 @@ function uploadForm(session: Session, refresh: () => Promise<void>): HTMLElement
       syncKind();
       status.className = 'muted';
       if (ordinary) {
-        status.textContent = 'Uploaded. Starting background removal…';
+        status.textContent = 'Draft saved. Starting background removal…';
         try {
           await processApi({ action: 'start', greeting: id });
-          status.textContent = 'Saved as a private draft. Background removal is running below; you can leave this page and come back.';
+          status.textContent = 'Draft saved. Removing the background now (about 2 minutes). You can leave this page; it carries on and you can come back later.';
         } catch (err) {
-          fail(`Saved as a private draft, but processing did not start: ${err instanceof Error ? err.message : String(err)}`);
+          fail(`Your draft is saved, but background removal did not start: ${describeError(err, 'unknown problem')} Use Try again on the draft below.`);
         }
       } else {
         status.textContent = 'Checking the uploaded video on the server…';
         try {
           const v = await processApi<{ media_state: string; media_error: string | null }>({ action: 'verify', greeting: id });
-          if (v.media_state === 'ready') status.textContent = 'Saved as a private draft. Publish it below to get the link and QR.';
-          else fail(`Saved as a private draft, but the video check failed: ${v.media_error ?? 'unknown problem'}`);
+          if (v.media_state === 'ready') status.textContent = 'Draft saved. Tap Preview draft to check it, then Publish to get the link and QR code.';
+          else fail(`Your draft is saved, but the video check failed: ${v.media_error ?? 'unknown problem'}`);
         } catch (err) {
-          fail(`Saved as a private draft, but the server check did not run: ${err instanceof Error ? err.message : String(err)}`);
+          fail(`Your draft is saved, but the video check did not run: ${describeError(err, 'unknown problem')}`);
         }
       }
       await refresh();
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') fail('Upload cancelled. Nothing was saved.');
+      else if (navigator.onLine === false) fail('The upload stopped because the phone went offline. Nothing was saved; reconnect and upload again.');
       else fail(describeError(err, 'The greeting could not be saved.'));
     } finally {
       controller = null;
@@ -315,7 +340,7 @@ async function card(g: GreetingRow, refresh: () => Promise<void>): Promise<HTMLL
   const ready = g.media_state === 'ready';
   item.append(
     el('strong', undefined, g.title),
-    el('p', published ? 'status-published' : 'muted', published ? 'Published: anyone with the link can view it' : 'Private draft: only you can see it'),
+    el('p', published ? 'status-published' : 'muted', published ? 'Published: anyone with the link or QR code can view it.' : ready ? 'Private draft: only you can see it. Preview it, then publish.' : 'Private draft: only you can see it.'),
     el('p', 'muted', `${g.source_kind === 'ordinary' ? 'Automatic cutout' : (FORMAT_LABELS[g.video_format] ?? g.video_format)} · ${(g.video_bytes / 1048576).toFixed(1)} MiB${g.video_duration ? ` · ${g.video_duration.toFixed(1)} s` : ''}`),
   );
   const status = el('p', 'muted');
@@ -330,6 +355,7 @@ async function card(g: GreetingRow, refresh: () => Promise<void>): Promise<HTMLL
   if (ready || published) actions.append(preview);
   actions.append(toggle, del);
   if (!ready) item.append(mediaPanel(g, refresh));
+  if (!published && !ready) item.append(el('p', 'muted small', 'You can publish once the video is ready.'));
   toggle.addEventListener('click', async () => {
     toggle.disabled = true;
     status.className = 'muted';
@@ -371,7 +397,7 @@ async function card(g: GreetingRow, refresh: () => Promise<void>): Promise<HTMLL
     copy.addEventListener('click', () => {
       void navigator.clipboard?.writeText(url).then(() => (status.textContent = 'Link copied.'), () => (status.textContent = url));
     });
-    item.append(qr, link, download, copy);
+    item.append(el('p', 'muted small', 'Share the link, or let people scan the QR code. They don’t need an account. On Android, Chrome places it in their room.'), qr, link, download, copy);
   }
   item.append(actions);
   if (g.source_kind !== 'ordinary') item.append(editor(g, refresh));
@@ -444,9 +470,9 @@ function mediaPanel(g: GreetingRow, refresh: () => Promise<void>): HTMLElement {
 }
 
 const STAGE_TEXT: Record<string, string> = {
-  Preparing: 'Preparing your video (step 1 of 3)… this can take a minute or two.',
-  'Removing background': 'Removing the background (step 2 of 3)…',
-  Finishing: 'Finishing the cutout (step 3 of 3)…',
+  Preparing: 'Step 1 of 3: preparing your video… (about 1 minute)',
+  'Removing background': 'Step 2 of 3: removing the background… (about 1 minute)',
+  Finishing: 'Step 3 of 3: finishing your cutout… (under a minute)',
 };
 
 /** Advance a job from this page until it finishes; survives reloads because the server keeps the state. */
@@ -463,7 +489,7 @@ async function drive(job: JobStatus, show: (t: string, e?: boolean) => void): Pr
         await sleep(next.stage === 'Removing background' ? 5000 : 1000);
       } catch (err) {
         failures += 1;
-        show(`${describeError(err, 'Lost contact with the server.')} Retrying…`, true);
+        show(`${describeError(err, 'Lost contact with the server.')} Your video is safe; retrying automatically…`, true);
         await sleep(Math.min(30_000, 5000 * failures));
       }
     }

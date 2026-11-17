@@ -27,7 +27,7 @@ export async function showGreeting(
   const h1 = document.createElement('h1');
   h1.className = 'player-title';
   h1.textContent = config.title;
-  overlay.append(h1);
+  overlay.append(h1, arHelp());
   root.append(overlay);
   app.replaceChildren(root);
   const dispose = mountVideo(root, config);
@@ -35,4 +35,19 @@ export async function showGreeting(
   window.addEventListener('pageshow', (e) => {
     if (e.persisted) window.location.reload();
   });
+}
+
+/** Short how-to for recipients; hidden once AR starts (the AR status line takes over). */
+function arHelp(): HTMLElement {
+  const help = document.createElement('p');
+  help.className = 'ar-help';
+  help.textContent = 'Tap Play to watch here, or Enter AR to place it in your room: allow the camera, point at the floor and tap to place.';
+  void navigator.xr?.isSessionSupported('immersive-ar').then(
+    (ok) => {
+      if (!ok) help.textContent = 'Tap Play to watch. To place it in your room, open this link in Chrome on an Android phone with ARCore.';
+    },
+    () => undefined,
+  );
+  if (!navigator.xr) help.textContent = 'Tap Play to watch. To place it in your room, open this link in Chrome on an Android phone with ARCore.';
+  return help;
 }

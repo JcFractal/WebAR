@@ -190,7 +190,7 @@ export async function loadForPlayback(slug: string): Promise<{ greeting: Publish
     throw new GreetingUnavailable(res.status === 503 ? SERVICE_MISSING : `The greeting service did not respond correctly (HTTP ${res.status}). Try again shortly.`);
   }
   if (URL_ && KEY && (await currentSession())) {
-    const own = await supabase().from('greetings').select('slug,title,video_path,video_format,video_mime').eq('slug', slug).maybeSingle();
+    const own = await supabase().from('greetings').select('slug,title,theme,video_path,video_format,video_mime').eq('slug', slug).maybeSingle();
     if (own.data) {
       const g = own.data as PublishedGreeting;
       return { greeting: g, videoUrl: await signedVideoUrl(g.video_path), draft: true };

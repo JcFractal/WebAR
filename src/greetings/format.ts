@@ -54,7 +54,7 @@ export function uploadProblems(
   if (!mime) problems.push(`“${file.name}” is not an MP4 or WebM file.`);
   if (file.size === 0) problems.push(`“${file.name}” is empty.`);
   if (file.size > UPLOAD_MAX_BYTES) {
-    problems.push(`“${file.name}” is ${(file.size / 1048576).toFixed(1)} MiB; the limit is ${UPLOAD_MAX_BYTES / 1048576} MiB.`);
+    problems.push(`“${file.name}” is ${(Math.ceil(file.size / 10485.76) / 100).toFixed(2)} MiB; the limit is ${UPLOAD_MAX_BYTES / 1048576} MiB.`);
   }
   problems.push(...formatProblems(mime, format));
   if (meta) {
@@ -68,6 +68,21 @@ export function uploadProblems(
     } else if (meta.duration < min || meta.duration > max) {
       problems.push(`This video is ${meta.duration.toFixed(1)} s; greetings must be ${min}–${max} s.`);
     }
+  }
+  return problems;
+}
+
+/** Client pre-check for an ordinary recording (the server re-checks before any paid processing). */
+export function sourceProblems(file: UploadCandidate, meta?: { duration: number }): string[] {
+  const problems: string[] = [];
+  if (!mimeFor(file)) problems.push(`“${file.name}” is not an MP4 or WebM recording.`);
+  if (file.size === 0) problems.push(`“${file.name}” is empty.`);
+  if (file.size > UPLOAD_MAX_BYTES) {
+    problems.push(`“${file.name}” is ${(Math.ceil(file.size / 10485.76) / 100).toFixed(2)} MiB; the limit is ${UPLOAD_MAX_BYTES / 1048576} MiB. Record at 1080p or keep it shorter.`);
+  }
+  const [min, max] = GREETING_SECONDS;
+  if (meta && Number.isFinite(meta.duration) && meta.duration > 0 && (meta.duration < min || meta.duration > max)) {
+    problems.push(`This recording is ${meta.duration.toFixed(1)} s; greetings must be ${min}–${max} s.`);
   }
   return problems;
 }

@@ -27,6 +27,11 @@ export interface GreetingRow {
   video_height: number | null;
   video_duration: number | null;
   status: 'draft' | 'published';
+  /** Server-verified video state; only `ready` may be published. */
+  media_state: 'pending' | 'processing' | 'ready' | 'failed';
+  media_error: string | null;
+  source_kind: 'prepared' | 'ordinary';
+  source_path: string | null;
   published_at: string | null;
   created_at: string;
   updated_at: string;
@@ -105,7 +110,10 @@ export function uploadVideo(
   });
 }
 
-export async function createGreeting(row: Omit<GreetingRow, 'owner_id' | 'slug' | 'status' | 'published_at' | 'created_at' | 'updated_at'>): Promise<GreetingRow> {
+type NewGreeting = Omit<GreetingRow, 'owner_id' | 'slug' | 'status' | 'published_at' | 'created_at' | 'updated_at' | 'media_state' | 'media_error' | 'source_kind' | 'source_path'> &
+  Partial<Pick<GreetingRow, 'source_kind' | 'source_path'>>;
+
+export async function createGreeting(row: NewGreeting): Promise<GreetingRow> {
   const { data, error } = await supabase().from('greetings').insert(row).select('*').single();
   if (error) throw error;
   return data as GreetingRow;
@@ -117,14 +125,52 @@ export async function updateGreeting(id: string, patch: Partial<Pick<GreetingRow
   return data as GreetingRow;
 }
 
-/** Row first, so a published link never points at a missing file; a failed file removal is reported. */
-export async function deleteGreeting(g: GreetingRow): Promise<void> {
-  const { error } = await supabase().from('greetings').delete().eq('id', g.id);
-  if (error) throw error;
-  const removed = await supabase().storage.from(BUCKET).remove([g.video_path]);
-  if (removed.error || removed.data?.length === 0) {
-    throw new Error(`The greeting was deleted, but its video file (${g.video_path}) could not be removed; delete it in Supabase Storage.`);
+export interface JobStatus {
+  id: string;
+  greeting_id: string;
+  attempt: number;
+  state: string;
+  stage: string;
+  error_code: string | null;
+  user_message: string | null;
+}
+
+export const JOB_DONE = ['ready', 'failed', 'cancelled'];
+
+/** Server processing API (api/process.ts); errors carry the server's plain-language message. */
+export async function processApi<T>(body: { action: string; greeting?: string; job?: string }): Promise<T> {
+  const session = await currentSession();
+  if (!session) throw new Error('Your sign-in has expired. Sign in again.');
+  let res: Response;
+  try {
+    res = await fetch(`${import.meta.env.BASE_URL}api/process`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new Error('No connection to the greeting service. Check your network; processing continues once you are back.');
   }
+  const out = (await res.json().catch(() => ({}))) as T & { message?: string };
+  if (!res.ok) throw new Error(out.message ?? `The greeting service did not respond correctly (HTTP ${res.status}).`);
+  return out;
+}
+
+export async function latestJob(greetingId: string): Promise<JobStatus | null> {
+  const { data, error } = await supabase()
+    .from('processing_jobs')
+    .select('id,greeting_id,attempt,state,error_code,user_message')
+    .eq('greeting_id', greetingId)
+    .order('attempt', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? ({ ...data, stage: '' } as JobStatus) : null;
+}
+
+/** Server-side delete: cancels any provider request and removes every file of the greeting. */
+export async function deleteGreeting(g: GreetingRow): Promise<void> {
+  await processApi({ action: 'delete', greeting: g.id });
 }
 
 export class GreetingUnavailable extends Error {}

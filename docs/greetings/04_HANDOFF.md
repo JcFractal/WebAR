@@ -69,7 +69,7 @@ Juan's priority (Nov 16, ~4 h of access left): a usable Android creator MVP befo
   - a second phone opening the QR.
 
 ### G3 hosted state (Nov 16)
-- Supabase project `webar-greetings` (ref `jqgxymyyxuozmvbujixs`, us-east-1). Migration applied via the Management API. Auth: email on, Confirm email **on**, Site URL `https://web-ar-gold.vercel.app`, redirect allow-list `https://web-ar-gold.vercel.app/**`, `https://*-jc-fractal-studios.vercel.app/**`, `http://localhost:5173/**`. Allowlisted creator: `juan@jcfractal.com`.
+- Supabase project `webar-greetings` (ref `jqgxymyyxuozmvbujixs`, us-east-1). Migration applied via the Management API. Auth: email on, Confirm email **on**, Site URL `https://web-ar-gold.vercel.app`, redirect allow-list `https://web-ar-gold.vercel.app/**`, `https://*-jc-fractal-studios.vercel.app/**`, `http://localhost:5173/**`. Allowlisted creators: `jcfractal2012@yahoo.com` (the account Juan uses, confirmed) and `juan@jcfractal.com` (unused).
 - New Supabase projects no longer grant table privileges to `anon`/`authenticated`/`service_role` by default. The migration now grants them explicitly (`4a2b4b6`). Without that, `api/greeting` returned 502 `lookup-failed`.
 - Vercel `web-ar` (`prj_xFo9OOOefZJpx4f6S4XAjUD2RclB`, team `team_SBqpKAEMAXH5ZRcXOZlZkKb6`). Env vars are set for **Preview, branch `devin/g3-creator` only**: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (sensitive). Not yet set for Production. Juan turned Vercel Authentication off.
 - Preview: `https://web-ar-git-devin-g3-creator-jc-fractal-studios.vercel.app/?create`. Signed-out access verified with curl and a fresh browser context.

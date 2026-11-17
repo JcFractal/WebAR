@@ -1,0 +1,20 @@
+{
+  "id": "greeting-alpha-test",
+  "template": "video",
+  "title": "Video greeting cutout test (native alpha WebM)",
+  "settings": {
+    "source": "media/synthetic-greeting-alpha.webm",
+    "sourceNote": "Synthetic test clip (drawn figure, not a real person), cut out by a chroma matte. It checks native-alpha WebM playback only, not real-footage matting quality.",
+    "displayHeightMeters": 1.2,
+    "bottomOffsetMeters": 0,
+    "loop": false,
+    "localFile": true,
+    "keying": {
+      "mode": "alpha",
+      "color": "#00b140",
+      "tolerance": 0.25,
+      "softness": 0.1,
+      "spill": 0.5
+    }
+  }
+}

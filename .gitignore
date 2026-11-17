@@ -3,3 +3,7 @@ dist/
 .vercel/
 *.log
 .DS_Store
+
+# G2 private footage and processing outputs never go in Git.
+g2-private/
+*.private.*

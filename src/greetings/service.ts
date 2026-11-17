@@ -19,6 +19,7 @@ export interface GreetingRow {
   owner_id: string;
   slug: string;
   title: string;
+  theme: Theme;
   video_path: string;
   video_format: VideoFormat;
   video_mime: string;
@@ -37,9 +38,12 @@ export interface GreetingRow {
   updated_at: string;
 }
 
+export type Theme = 'plain' | 'birthday';
+
 export interface PublishedGreeting {
   slug: string;
   title: string;
+  theme?: Theme;
   video_path: string;
   video_format: string;
   video_mime: string;
@@ -119,7 +123,7 @@ export async function createGreeting(row: NewGreeting): Promise<GreetingRow> {
   return data as GreetingRow;
 }
 
-export async function updateGreeting(id: string, patch: Partial<Pick<GreetingRow, 'title' | 'status' | 'video_format'>>): Promise<GreetingRow> {
+export async function updateGreeting(id: string, patch: Partial<Pick<GreetingRow, 'title' | 'theme' | 'status' | 'video_format'>>): Promise<GreetingRow> {
   const { data, error } = await supabase().from('greetings').update(patch).eq('id', id).select('*').single();
   if (error) throw error;
   return data as GreetingRow;

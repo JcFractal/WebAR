@@ -230,3 +230,33 @@ html.ar-active .ar-help { display: none; }
   .creator-actions .button { width: 100%; text-align: center; }
   .creator-actions .button:only-child { grid-column: 1 / -1; }
 }
+
+/* Birthday style: festive header only; the video and AR rendering are unchanged. */
+.theme-tag { display: none; }
+.theme-birthday .overlay {
+  background:
+    radial-gradient(circle at 8% 30%, #ffd166 0 3px, transparent 4px),
+    radial-gradient(circle at 22% 75%, #ff6ad5 0 3px, transparent 4px),
+    radial-gradient(circle at 41% 18%, #4dd8ff 0 2px, transparent 3px),
+    radial-gradient(circle at 63% 64%, #7cfc9a 0 3px, transparent 4px),
+    radial-gradient(circle at 80% 22%, #ff6ad5 0 2px, transparent 3px),
+    radial-gradient(circle at 93% 70%, #ffd166 0 3px, transparent 4px),
+    linear-gradient(#2a0f2ecc, transparent);
+}
+.theme-birthday .theme-tag {
+  display: block;
+  width: 100%;
+  margin: 0;
+  color: #ffd166;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.theme-birthday .player-title {
+  background: linear-gradient(90deg, #ffd166, #ff6ad5);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.theme-birthday .hud-button.active { border-color: #ff6ad5; box-shadow: 0 0 0 1px #ff6ad5 inset; }

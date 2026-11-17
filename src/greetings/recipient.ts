@@ -27,6 +27,13 @@ export async function showGreeting(
   const h1 = document.createElement('h1');
   h1.className = 'player-title';
   h1.textContent = config.title;
+  if (found.greeting.theme === 'birthday') {
+    root.classList.add('theme-birthday');
+    const tag = document.createElement('p');
+    tag.className = 'theme-tag';
+    tag.textContent = 'Happy birthday';
+    overlay.append(tag);
+  }
   overlay.append(h1, arHelp());
   root.append(overlay);
   app.replaceChildren(root);

@@ -14,6 +14,7 @@ import {
   uploadVideo,
   type GreetingRow,
   type JobStatus,
+  type Theme,
 } from './service';
 
 /** Ordinary-recording upload with automatic background removal (G4); off until processing is switched on. */
@@ -203,6 +204,9 @@ function uploadForm(session: Session, refresh: () => Promise<void>): HTMLElement
   file.accept = 'video/mp4,.mp4,video/webm,.webm';
   const format = el('select');
   for (const f of VIDEO_FORMATS) format.append(new Option(FORMAT_LABELS[f], f));
+  const theme = themeSelect('plain');
+  const themeLabel = el('label', 'creator-label', 'Style');
+  themeLabel.append(theme);
   const kind = el('select');
   kind.append(new Option('Ordinary recording: remove the background automatically', 'ordinary'), new Option('Already processed cutout', 'prepared'));
   const kindLabel = el('label', 'creator-label', 'What are you uploading?');
@@ -232,7 +236,7 @@ function uploadForm(session: Session, refresh: () => Promise<void>): HTMLElement
   cancel.hidden = true;
   const actions = el('div', 'creator-actions');
   actions.append(save, cancel);
-  form.append(el('h2', 'gallery-section', 'New greeting'), titleLabel, kindLabel, fileLabel, formatLabel, progress, status, actions);
+  form.append(el('h2', 'gallery-section', 'New greeting'), titleLabel, themeLabel, kindLabel, fileLabel, formatLabel, progress, status, actions);
 
   file.addEventListener('change', () => {
     const f = file.files?.[0];
@@ -284,6 +288,7 @@ function uploadForm(session: Session, refresh: () => Promise<void>): HTMLElement
         await createGreeting({
           id,
           title: title.value.trim(),
+          theme: theme.value as Theme,
           video_path: ordinary ? `${session.user.id}/${id}.mp4` : path,
           video_format: fmt,
           video_mime: ordinary ? 'video/mp4' : mime,
@@ -502,12 +507,13 @@ async function drive(job: JobStatus, show: (t: string, e?: boolean) => void): Pr
 /** Edit title and stored format in place; the link id and video stay the same. */
 function editor(g: GreetingRow, refresh: () => Promise<void>): HTMLElement {
   const box = el('details', 'creator-edit');
-  box.append(el('summary', undefined, 'Edit title or format'));
+  box.append(el('summary', undefined, 'Edit title, style or format'));
   const form = el('form', 'creator-form');
   const title = el('input');
   title.required = true;
   title.maxLength = 80;
   title.value = g.title;
+  const theme = themeSelect(g.theme ?? 'plain');
   const format = el('select');
   for (const f of VIDEO_FORMATS) format.append(new Option(FORMAT_LABELS[f], f));
   format.value = g.video_format;
@@ -515,7 +521,7 @@ function editor(g: GreetingRow, refresh: () => Promise<void>): HTMLElement {
   save.type = 'submit';
   const status = el('p', 'muted');
   status.setAttribute('role', 'status');
-  form.append(title, format, save, status);
+  form.append(title, theme, format, save, status);
   box.append(form);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -532,7 +538,7 @@ function editor(g: GreetingRow, refresh: () => Promise<void>): HTMLElement {
     }
     save.disabled = true;
     try {
-      await updateGreeting(g.id, { title: title.value.trim(), video_format: fmt });
+      await updateGreeting(g.id, { title: title.value.trim(), theme: theme.value as Theme, video_format: fmt });
       await refresh();
     } catch (err) {
       save.disabled = false;
@@ -541,4 +547,11 @@ function editor(g: GreetingRow, refresh: () => Promise<void>): HTMLElement {
     }
   });
   return box;
+}
+
+function themeSelect(value: Theme): HTMLSelectElement {
+  const s = el('select');
+  s.append(new Option('Plain', 'plain'), new Option('Birthday', 'birthday'));
+  s.value = value;
+  return s;
 }

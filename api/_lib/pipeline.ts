@@ -316,21 +316,16 @@ export async function tick(ctx: Ctx, user: User | null, jobId: string): Promise<
       const path = `${g.owner_id}/${job.greeting_id}-cutout-${mine.attempt}.mp4`;
       await putObject(ctx, VIDEOS, path, out);
       uploadedTo = path;
-      // Greeting first, then the job: if the job update is lost, the next try repeats both.
-      await setGreeting(ctx, job.greeting_id, {
-        media_state: 'ready', media_error: null, media_checked_at: iso(now(ctx)), video_format: 'packed', video_mime: 'video/mp4',
-        video_path: path, video_bytes: bytes, video_width: info.width, video_height: info.height, video_duration: info.duration,
+      // Job and greeting become ready in one transaction; a lost race (cancel, delete, newer attempt) changes neither.
+      const fin = await ctx.db.rpc('finish_processing', {
+        job: mine.id, expected_version: mine.version, path, bytes, width: info.width, height: info.height, duration: info.duration,
       });
-      const done = await transition(ctx, mine, { state: 'ready', lease_until: null, finished_at: iso(now(ctx)), error_code: null, user_message: null });
-      if (!done) {
-        // Cancelled or deleted meanwhile: undo this attempt only (the greeting may point at a newer one by now).
-        const cur = await loadJob(ctx, job.id);
-        const undo = await ctx.db.from('greetings').update({ media_state: 'failed', media_error: cur?.user_message ?? 'Processing was cancelled.', video_path: `${g.owner_id}/${job.greeting_id}.mp4` })
-          .eq('id', job.greeting_id).eq('video_path', path);
-        if (undo.error) throw undo.error;
+      if (fin.error) throw fin.error;
+      if (fin.data !== true) {
         await ctx.db.storage.from(VIDEOS).remove([path]);
         return after(null);
       }
+      const done = (await loadJob(ctx, mine.id))!;
       await cleanup(ctx, job.greeting_id!, true);
       return after(done);
     } catch (err) {

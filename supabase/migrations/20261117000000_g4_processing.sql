@@ -212,6 +212,26 @@ end $$;
 revoke all on function public.reserve_processing(uuid, real) from public;
 grant execute on function public.reserve_processing(uuid, real) to service_role;
 
+-- Job -> ready and greeting -> ready in one transaction: a lost race (cancel, delete, newer attempt) changes neither.
+create or replace function public.finish_processing(job uuid, expected_version int, path text, bytes bigint,
+  width int, height int, duration double precision)
+returns boolean language plpgsql security definer set search_path = public as $$
+declare
+  g uuid;
+begin
+  update public.processing_jobs set state = 'ready', lease_until = null, finished_at = now(), error_code = null, user_message = null
+    where id = job and version = expected_version and state = 'packing' and greeting_id is not null
+    returning greeting_id into g;
+  if g is null then return false; end if;
+  update public.greetings set media_state = 'ready', media_error = null, media_checked_at = now(), video_format = 'packed',
+    video_mime = 'video/mp4', video_path = path, video_bytes = bytes, video_width = width, video_height = height,
+    video_duration = duration
+    where id = g;
+  return true;
+end $$;
+revoke all on function public.finish_processing(uuid, int, text, bigint, int, int, double precision) from public;
+grant execute on function public.finish_processing(uuid, int, text, bigint, int, int, double precision) to service_role;
+
 -- Temporary processing files (normalized input, provider mattes): private, 50 MiB like the video bucket.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('greeting-work', 'greeting-work', false, 52428800, null)

@@ -1,9 +1,9 @@
 # AR Greetings — living handoff
-Last updated: November 16, 2026 (G2 accepted on Android; G3 creator MVP on PR #10, waiting for the Supabase project; Devin)
+Last updated: November 16, 2026 (G2 accepted on Android; G3 creator MVP passed on the S24, PR #10 awaiting Juan's merge; Devin)
 Update this file in every implementation PR and before pausing or switching tools.
 
 ## Current status
-- Stage: **G3 Android creator MVP built on PR #10, hosted preview live and verified on desktop, S24 test pending; G2 accepted on Android (PR #9); G1 complete (PR #8).** None merged (Juan merges). S24 acceptance checks 1–7 passed on the real greeting page (no `&diag`), and so did the voice response part of check 8. The rest of check 8 (Neon Garden and Cosmic Vortex AR placement, ARCore version) is not yet recorded; it is a particle regression check and does not block G2. The earlier AR invisibility no longer reproduces; **its cause is unknown** (see the investigation section).
+- Stage: **G3 Android creator MVP built on PR #10, hosted preview live; **S24 test passed (Juan, Nov 16)**; G2 accepted on Android (PR #9); G1 complete (PR #8).** None merged (Juan merges). S24 acceptance checks 1–7 passed on the real greeting page (no `&diag`), and so did the voice response part of check 8. The rest of check 8 (Neon Garden and Cosmic Vortex AR placement, ARCore version) is not yet recorded; it is a particle regression check and does not block G2. The earlier AR invisibility no longer reproduces; **its cause is unknown** (see the investigation section).
 - iOS / iPhone: **untested.** Juan has no iPhone available. The iPhone milestone (ordinary-playback fallback check and the separate iPhone tracking follow-on) is **deferred** by Juan on 2026-11-14 and does not block Android work. Nothing in G1 or G2 claims iPhone compatibility.
 - Active agent: Devin. G2 (Android cutout proof) assigned by Juan on 2026-11-14 and continues on a new branch from the tested G1 commit; see the G2 section when present.
 - Merges: Juan only. PR #8 stays open until he merges it.
@@ -61,12 +61,8 @@ Juan's priority (Nov 16, ~4 h of access left): a usable Android creator MVP befo
   - `npm run typecheck` passes, `npm test` 19/19, `npm run build` passes.
   - Desktop Chrome (CDP, no WebXR) end-to-end against a **local** Supabase (`supabase start`, same migration, `~/g3-local/e2e.mjs`, not in Git): 32/32 checks pass.
   - Covered: the gallery link; wrong-password error; a non-allowlisted account refused at upload; packed/portrait and non-video rejected; upload progress with throttling; a double tap gives one draft; draft private and listed; owner preview of the draft; anonymous blocked from the draft; a second account can't read/publish/sign/write A's data; anonymous storage listing empty; slug/owner immutable; publish → QR PNG with payload equal to the link; editing keeps the link; anonymous recipient plays the packed cutout (1440-wide video, crossOrigin, cutout rendered); unpublish stops the link; malformed link explained; `?exp=neon-garden` still loads.
-- **Not yet done:**
-  - the hosted project (no Supabase access yet);
-  - Vercel env vars;
-  - a phone test;
-  - the S24 AR placement of a stored greeting;
-  - a second phone opening the QR.
+- **S24 result (Juan, Nov 16, 19:22 EST): pass.** On the hosted preview, as `jcfractal2012@yahoo.com`, Juan created, published and opened a stored greeting. In his words: "the published greeting opens, places in AR, plays with no background, includes audio, and Replay works." This is also the S24 check for a stored **packed** greeting.
+- Not reported: whether the recipient side was a second phone or a signed-out browser; detailed edge/flicker/sync notes. iOS untested (deferred).
 
 ### G3 hosted state (Nov 16)
 - Supabase project `webar-greetings` (ref `jqgxymyyxuozmvbujixs`, us-east-1). Migration applied via the Management API. Auth: email on, Confirm email **on**, Site URL `https://web-ar-gold.vercel.app`, redirect allow-list `https://web-ar-gold.vercel.app/**`, `https://*-jc-fractal-studios.vercel.app/**`, `http://localhost:5173/**`. Allowlisted creators: `jcfractal2012@yahoo.com` (the account Juan uses, confirmed) and `juan@jcfractal.com` (unused).
@@ -90,15 +86,16 @@ Juan's priority (Nov 16, ~4 h of access left): a usable Android creator MVP befo
 
 ### G3 next steps (exact)
 1. Done Nov 16: hosted project, migration, allowlist, preview env vars, signed-out access (see hosted state).
-2. S24: open the PR #10 preview `?create` → sign in → upload `juan-take1-packed.mp4` (format Packed) → Publish → Download QR. On a second phone, or signed out/incognito, open the link/QR → play → AR place.
-3. Record the result here; then fix anything the phone finds. After that: G4 automatic fal processing from an ordinary upload (reuse `scripts/g2/cutout.py` logic server-side), then G5 templates/polish.
+2. Done Nov 16: S24 creator → publish → open → AR place → play with audio → Replay passed.
+3. Juan reviews/merges #8 → #9 → #10 (retarget each to `main` in turn). Then add the four Supabase vars to Vercel **Production** plus `VITE_GREETING_BASE_URL=https://web-ar-gold.vercel.app/`, add the production Site URL check, redeploy, and re-run the publish → signed-out open test on production before printing real QRs.
+4. After that: G4 automatic fal processing from an ordinary upload (reuse `scripts/g2/cutout.py` logic server-side), then G5 templates/polish.
 
 ## Milestone tracking
 | Milestone | Code/status | Browser checks | Phone checks | PR / commit |
 | --- | --- | --- | --- | --- |
 | G1 video placement | Complete on Android; awaiting Juan's merge. Diagnostics and probe kept behind URL flags | typecheck/build/`npm test` 12/12; headless CDP smoke 68/68 (no WebXR) | S24: checks 1–7 pass; check 8 voice part pass, particle AR + ARCore version not recorded. iOS untested (deferred) | PR #8, tested tip 67a13fb |
 | G2 cutout/format proof | Accepted on Android (Nov 16): player `packed`/`alpha` modes, `scripts/g2/cutout.py`, synthetic fixtures; one fal run on Juan's real clip ($0.032) | typecheck/build/`npm test` 15/15; headless desktop Chrome renders both synthetic cutouts | Real clip: alpha WebM works in AR (Juan, Nov 16); packed MP4 pending | PR #9 (base `devin/g1-video-placement`), branch `devin/g2-cutout` |
-| G3 creator MVP | Built: Supabase auth/storage, private drafts, explicit format, publish/unpublish, link + QR, recipient `api/greeting` | typecheck/build/`npm test` 19/19; local-Supabase desktop Chrome E2E 32/32 ; hosted preview E2E 16/16 | Not run yet (S24 test pending) | PR #10 (base `devin/g2-cutout`), branch `devin/g3-creator` |
+| G3 creator MVP | Passed on Android (Nov 16); awaiting merge: Supabase auth/storage, private drafts, explicit format, publish/unpublish, link + QR, recipient `api/greeting` | typecheck/build/`npm test` 19/19; local-Supabase desktop Chrome E2E 32/32 ; hosted preview E2E 16/16 | S24 pass (Juan, Nov 16): published greeting opens, AR places, cutout, audio, Replay | PR #10 (base `devin/g2-cutout`), branch `devin/g3-creator` |
 | G4 automatic processing | Not started | Not run | Not run | — |
 | G5 templates/private trial | Not started | Not run | Not run | — |
 

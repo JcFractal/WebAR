@@ -1,9 +1,9 @@
 # AR Greetings — living handoff
-Last updated: November 16, 2026 (G2: real-clip alpha WebM works in AR on the S24; packed MP4 S24 test pending; Devin)
+Last updated: November 16, 2026 (G2 accepted on Android; G3 creator MVP passed on the S24, PR #10 awaiting Juan's merge; Devin)
 Update this file in every implementation PR and before pausing or switching tools.
 
 ## Current status
-- Stage: **G1 complete on Android, awaiting Juan's review/merge of PR #8.** S24 acceptance checks 1–7 passed on the real greeting page (no `&diag`), and so did the voice response part of check 8. The rest of check 8 (Neon Garden and Cosmic Vortex AR placement, ARCore version) is not yet recorded; it is a particle regression check and does not block G2. The earlier AR invisibility no longer reproduces; **its cause is unknown** (see the investigation section).
+- Stage: **G3 Android creator MVP built on PR #10, hosted preview live; **S24 full flow incl. unpublish passed (Juan, Nov 16)**; Production env vars set, awaiting merge; G2 accepted on Android (PR #9); G1 complete (PR #8).** None merged (Juan merges). S24 acceptance checks 1–7 passed on the real greeting page (no `&diag`), and so did the voice response part of check 8. The rest of check 8 (Neon Garden and Cosmic Vortex AR placement, ARCore version) is not yet recorded; it is a particle regression check and does not block G2. The earlier AR invisibility no longer reproduces; **its cause is unknown** (see the investigation section).
 - iOS / iPhone: **untested.** Juan has no iPhone available. The iPhone milestone (ordinary-playback fallback check and the separate iPhone tracking follow-on) is **deferred** by Juan on 2026-11-14 and does not block Android work. Nothing in G1 or G2 claims iPhone compatibility.
 - Active agent: Devin. G2 (Android cutout proof) assigned by Juan on 2026-11-14 and continues on a new branch from the tested G1 commit; see the G2 section when present.
 - Merges: Juan only. PR #8 stays open until he merges it.
@@ -12,7 +12,7 @@ Update this file in every implementation PR and before pausing or switching tool
 - Greeting branch / commit / PR: `devin/g1-video-placement`; G1 code a1fd865, last code change 0f1ad9e (probe steps 6–10), phone-tested tip 67a13fb (later commits are docs only); PR https://github.com/JcFractal/WebAR/pull/8 (open, mergeable, not merged).
 - Greeting preview deployment: Vercel branch preview https://web-ar-git-devin-g1-video-placement-jc-fractal-studios.vercel.app/?exp=greeting-test (requires Vercel sign-in). Production is unchanged.
 - Existing production URL: https://web-ar-gold.vercel.app/ (main).
-- Backend project, schema and storage: not configured.
+- Backend project, schema and storage: schema + bucket defined in `supabase/migrations/`; verified on a local Supabase; dedicated hosted project not yet provided (see G3 setup).
 - Processing provider and media format: G2 in progress (see G2 section). Candidate formats implemented: packed colour|matte MP4 (primary) and native-alpha VP9 WebM (comparison); not yet decided on S24 evidence.
 - Personal test clips: none in Git. The repo contains only a generated synthetic fixture (`public/media/synthetic-greeting.mp4`, made by `scripts/make-synthetic-fixture.py`).
 - Open risk: the invisibility cause was never identified, so it could return; the probe (`&probe&step=…`) and `&diag` readout stay as opt-in references.
@@ -26,7 +26,7 @@ Update this file in every implementation PR and before pausing or switching tool
 - Not established by G1: background removal, uploads, sharing of personal greetings, real-footage keying quality, iPhone anything. Still open: check 8 particle AR + ARCore version.
 - After merge, the gallery's `greeting-test` QR (production base URL) starts working; before merge it points at a route production does not have.
 
-## G2 — Android cutout proof (in progress)
+## G2 — Android cutout proof (accepted on Android, Nov 16)
 - Branch `devin/g2-cutout`, created from the G1 branch at f43ca6a (tested code 67a13fb + docs). PR https://github.com/JcFractal/WebAR/pull/9, base `devin/g1-video-placement` so the diff is G2 only; retarget to `main` after PR #8 merges. Juan merges.
 - Preview (after Vercel builds the branch; Vercel sign-in): `https://web-ar-git-devin-g2-cutout-jc-fractal-studios.vercel.app/?exp=greeting-cutout-test` (packed) and `?exp=greeting-alpha-test` (native-alpha WebM). Both use the synthetic clip.
 - Player: `KEY_MODES` = `opaque | chroma | packed | alpha`. `packed` = one H.264/AAC MP4 at 2W×H, colour left, grayscale matte right; samples are clamped one texel inside each half; the plane shows half the decoded width. `alpha` = the texture's own alpha (VP9 `yuva420p` WebM). The local picker accepts MP4 and WebM; `*-packed.mp4` → packed, `*.webm` → alpha, otherwise opaque. Formats stay replaceable: the representation is just the `keying.mode` value plus the file.
@@ -40,16 +40,63 @@ Update this file in every implementation PR and before pausing or switching tool
 - fal returned `mask_video` (ProRes 4444, 720×1280, 30 fps, 257 frames) and `video` (refined foreground, 152 MB). The mask URL 404'd for ~1 min after the result, then downloaded; the foreground URL still 404'd 20+ min later (also via `fal_client.result`). The script now retries downloads on 404 rather than failing (`4904b72`). Deliverables were therefore built locally from the downloaded mask with `--method file:provider/mask.mov --source-colour` (no second provider call), so soft edges carry source-background spill.
 - VM evaluation (`report.json`): every output 257 frames; packed + ProRes audio bitstream identical to source, offset 0.000 s; WebM Opus offset −0.014 s. Matte coverage 0.51–0.62, soft-pixel fraction 0.021, binary flip mean 0.58% / p95 1.75%, worst frame 103. Visual: hair/face edges clean with a slight light fringe; at frame 103 a fast, motion-blurred arm at the left frame edge goes partly transparent and the shirt edge shows a light halo. Packed MP4 4.2 MB, alpha WebM 2.5 MB.
 - Delivered to Juan as private chat attachments (not in Git): `juan-take1-packed.mp4`, `juan-take1-alpha.webm`, contact sheet and edge crops. Masters (`-foreground.mov` 217 MB ProRes 4444, `-matte.mkv` FFV1, raw `provider/mask.mov`) remain in `~/g2-private/juan-take1/` on the VM only. S24 test: open `?exp=greeting-cutout-test` on the G2 preview, "Choose local video", pick each file.
-- **S24 result (Juan, Nov 16): the processed alpha WebM (`juan-take1-alpha.webm`, real clip, fal matte + source colour) worked in AR on the S24.** Packed MP4 (`juan-take1-packed.mp4`) S24 test sent; result pending. Detailed edge/flicker/sync notes from the phone not yet reported.
+- **S24 result (Juan, Nov 16): the processed alpha WebM (`juan-take1-alpha.webm`, real clip, fal matte + source colour) worked in AR on the S24.** Packed MP4 (`juan-take1-packed.mp4`) was re-sent as MP4 + ZIP after the first link downloaded as `.xml`. On Nov 16 Juan asked to "record the G2 phone passes" and proceed to G3; G2 is recorded as **accepted on Android** on that basis. No separate written packed-MP4 phone report or edge/flicker/sync notes exist; G3 stores `packed` and `alpha` explicitly, so either works, and the first G3 phone test (a stored packed greeting) doubles as the packed S24 check.
 - Cost: fal pricing API (authenticated) lists `fal-ai/birefnet/v2/video` at $0.000575 per compute second. The session key cannot read billing/usage, so actual cost = reported compute time × unit price (recorded in `provider/response.json` `metrics`).
 - Still to evaluate on S24: edges (hair/face/hands), leakage, flicker, audio sync start/middle/end, decode smoothness, load/replay, AR placement, for packed vs alpha.
+
+## G3 — Android creator MVP (priority set by Juan, Nov 16; PR #10)
+Juan's priority (Nov 16, ~4 h of access left): a usable Android creator MVP before automatic fal processing, decorative templates or visual polish. Target: sign in, upload an already processed packed MP4, create and save a greeting, publish a stable link and a downloadable QR; a recipient opens the link with no account and views/places it in the existing Android player. iOS stays deferred; the particle experiences are untouched.
+
+- Branch `devin/g3-creator` (from `devin/g2-cutout` at a40adbf). PR https://github.com/JcFractal/WebAR/pull/10, base `devin/g2-cutout` (G3-only diff); retarget after #8/#9 merge. Juan merges.
+- Routes: `?create` = creator (sign in / create account, new greeting, My greetings); `?g=<12-hex slug>` = recipient; `?exp=` unchanged. The gallery links to `?create`.
+- Creator: email + password (Supabase Auth). Pick an MP4/WebM, **choose the format explicitly** (`packed` | `alpha` | `opaque`; packed is suggested for MP4). Checks before upload: MP4/WebM only, ≤ 50 MiB, 3–30 s, the first frame must decode, a packed file must be wider than tall, and the format must match the container. Upload goes by XHR to Storage with a progress bar, Cancel, and plain-language errors. Saved as a **private draft**; edit the title/format; Publish / Unpublish / Delete. A published greeting shows the link, an SVG QR, **Download QR (PNG)** and Copy link.
+- Data (`supabase/migrations/20261116000000_greetings.sql`):
+  - `public.greetings`: `owner_id`, a stable `slug` assigned at creation, `title`, `video_path`, `video_format`, `video_mime`, `video_bytes`, width/height/duration, `status draft|published`, `published_at`.
+  - RLS allows the owner only. A guard trigger keeps `id`/`owner_id`/`slug`/`video_path` immutable.
+  - Invitation gate: `public.creator_emails` + `is_creator()` (the caller's **confirmed** email must be listed) are required to insert a greeting or upload. Anyone can sign up, but cannot create.
+  - Private bucket `greeting-videos` (50 MiB, video/mp4 + video/webm). Paths are `<uid>/<greeting id>.<ext>`; owners read/insert/delete their own folder.
+- Recipient: `api/greeting.ts` (Vercel function, Web `GET` signature) looks up one **published** greeting by slug with the service role and returns `{title, video_format, video_url}` with a 6 h signed URL. There is no anonymous table or storage access, so drafts and other greetings cannot be listed. The page then mounts the existing `mountVideo` with `keying.mode = video_format`; playback never depends on the file name. The signed-in owner can preview their own draft at the same URL. In dev, `vite.config.ts` serves the same handler at `/api/greeting`.
+- Links: `VITE_GREETING_BASE_URL` pins links/QRs to one domain. Unset, they use the deployment serving the page, which is a preview until merge, because production doesn't have the route yet. **Set it to `https://web-ar-gold.vercel.app/` after G3 merges, before printing real QRs.**
+- Verification so far:
+  - `npm run typecheck` passes, `npm test` 19/19, `npm run build` passes.
+  - Desktop Chrome (CDP, no WebXR) end-to-end against a **local** Supabase (`supabase start`, same migration, `~/g3-local/e2e.mjs`, not in Git): 32/32 checks pass.
+  - Covered: the gallery link; wrong-password error; a non-allowlisted account refused at upload; packed/portrait and non-video rejected; upload progress with throttling; a double tap gives one draft; draft private and listed; owner preview of the draft; anonymous blocked from the draft; a second account can't read/publish/sign/write A's data; anonymous storage listing empty; slug/owner immutable; publish → QR PNG with payload equal to the link; editing keeps the link; anonymous recipient plays the packed cutout (1440-wide video, crossOrigin, cutout rendered); unpublish stops the link; malformed link explained; `?exp=neon-garden` still loads.
+- **S24 result (Juan, Nov 16, 19:22 EST): pass.** On the hosted preview, as `jcfractal2012@yahoo.com`, Juan created, published and opened a stored greeting. In his words: "the published greeting opens, places in AR, plays with no background, includes audio, and Replay works." This is also the S24 check for a stored **packed** greeting.
+- **S24 full flow (Juan, Nov 16, 19:34 EST): pass.** Upload, draft preview, publish, recipient playback, AR placement, background removal, audio and Replay all passed. Unpublish passed too: refreshing the recipient link then showed "greeting unavailable".
+- Not reported: whether the recipient side was a second phone or a signed-out browser; detailed edge/flicker/sync notes. iOS untested (deferred).
+
+### G3 hosted state (Nov 16)
+- Supabase project `webar-greetings` (ref `jqgxymyyxuozmvbujixs`, us-east-1). Migration applied via the Management API. Auth: email on, Confirm email **on**, Site URL `https://web-ar-gold.vercel.app`, redirect allow-list `https://web-ar-gold.vercel.app/**`, `https://*-jc-fractal-studios.vercel.app/**`, `http://localhost:5173/**`. Allowlisted creators: `jcfractal2012@yahoo.com` (the account Juan uses, confirmed) and `juan@jcfractal.com` (unused).
+- New Supabase projects no longer grant table privileges to `anon`/`authenticated`/`service_role` by default. The migration now grants them explicitly (`4a2b4b6`). Without that, `api/greeting` returned 502 `lookup-failed`.
+- Vercel `web-ar` (`prj_xFo9OOOefZJpx4f6S4XAjUD2RclB`, team `team_SBqpKAEMAXH5ZRcXOZlZkKb6`). Env vars are set for **Preview, branch `devin/g3-creator` only**: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (sensitive). **Production** (all branches → production target) also set Nov 16, before merge: the same four vars plus `VITE_GREETING_BASE_URL=https://web-ar-gold.vercel.app/`. The production build only picks them up on the next production deploy (the merge of #10 into `main`). Juan turned Vercel Authentication off.
+- Preview: `https://web-ar-git-devin-g3-creator-jc-fractal-studios.vercel.app/?create`. Signed-out access verified with curl and a fresh browser context.
+- Hosted E2E (desktop Chrome via CDP against that preview and the real project; temporary confirmed users created via the admin API and deleted afterwards): **16/16 pass**. Covered: sign-in; upload with progress → private draft with `video_format=packed`; second user can't read/publish/sign; non-allowlisted user can't upload; anonymous table/storage listing empty; the API hides the draft (404); publish → link + QR PNG; signed-out recipient plays the 1440-wide packed cutout; unpublish stops it; delete removes row + file; `?exp=neon-garden` loads.
+- At merge: Production env vars are already in place; the merge deploy of `main` applies them. Supabase Auth Site URL is `https://web-ar-gold.vercel.app` and the redirect allow-list covers production, `*-jc-fractal-studios.vercel.app` previews and localhost. Built-in Supabase email is limited to 2 confirmation emails/hour; add custom SMTP before inviting more creators.
+
+### G3 setup (once per project; no secrets in Git)
+1. Create a dedicated Supabase project (e.g. `webar-greetings`). Auth → Providers → Email: enable it and **keep "Confirm email" on**. `is_creator()` requires a confirmed address; with auto-confirm, anyone could register an unused allowlisted email. Auth → URL configuration: set the Site URL to production and add the preview domain(s) to the redirect URLs, because the confirmation link returns to `?create`.
+2. Apply the migration in the SQL editor (or via the Management API `POST /v1/projects/{ref}/database/query`).
+3. Allow a creator: `insert into public.creator_emails values ('<email, lowercase>');`
+4. Vercel project `web-ar`, env vars for Preview (+ Production when merged):
+   - `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (public, built into the client);
+   - `SUPABASE_SERVICE_ROLE_KEY` (server-only, used by `api/greeting.ts`);
+   - optionally `VITE_GREETING_BASE_URL`.
+   Then redeploy.
+5. Vercel Deployment Protection: off for previews, or recipients get a Vercel sign-in page instead of the greeting.
+6. Local dev: `cp .env.example .env.local`, fill it in, `npm run dev`; or `npx supabase start` + `supabase db reset` for a fully local stack.
+
+### G3 next steps (exact)
+1. Done Nov 16: hosted project, migration, allowlist, preview env vars, signed-out access (see hosted state).
+2. Done Nov 16: S24 creator → publish → open → AR place → play with audio → Replay passed.
+3. Juan merges #8 → #9 → #10 in that order, using **"Create a merge commit"** (not squash/rebase, so the stacked branches stay clean). After each merge, change the next PR's base to `main` (branches are not auto-deleted, so GitHub will not retarget). Production env vars are already set. After #10 merges and the production deploy is Ready: confirm `https://web-ar-gold.vercel.app/api/greeting?g=000000000000` returns 404 `not-published`, sign in at `https://web-ar-gold.vercel.app/?create`, publish a greeting, check its link/QR uses `web-ar-gold.vercel.app`, open it signed out on the S24, and recheck Neon Garden / Cosmic Vortex, before printing real QRs.
+4. After that: G4 automatic fal processing from an ordinary upload (reuse `scripts/g2/cutout.py` logic server-side), then G5 templates/polish.
 
 ## Milestone tracking
 | Milestone | Code/status | Browser checks | Phone checks | PR / commit |
 | --- | --- | --- | --- | --- |
 | G1 video placement | Complete on Android; awaiting Juan's merge. Diagnostics and probe kept behind URL flags | typecheck/build/`npm test` 12/12; headless CDP smoke 68/68 (no WebXR) | S24: checks 1–7 pass; check 8 voice part pass, particle AR + ARCore version not recorded. iOS untested (deferred) | PR #8, tested tip 67a13fb |
-| G2 cutout/format proof | In progress: player `packed`/`alpha` modes, `scripts/g2/cutout.py`, synthetic fixtures; one fal run on Juan's real clip ($0.032) | typecheck/build/`npm test` 15/15; headless desktop Chrome renders both synthetic cutouts | Real clip: alpha WebM works in AR (Juan, Nov 16); packed MP4 pending | PR #9 (base `devin/g1-video-placement`), branch `devin/g2-cutout` |
-| G3 persistent creator app | Not started | Not run | Not run | — |
+| G2 cutout/format proof | Accepted on Android (Nov 16): player `packed`/`alpha` modes, `scripts/g2/cutout.py`, synthetic fixtures; one fal run on Juan's real clip ($0.032) | typecheck/build/`npm test` 15/15; headless desktop Chrome renders both synthetic cutouts | Real clip: alpha WebM works in AR (Juan, Nov 16); packed MP4 pending | PR #9 (base `devin/g1-video-placement`), branch `devin/g2-cutout` |
+| G3 creator MVP | Passed on Android (Nov 16); awaiting merge: Supabase auth/storage, private drafts, explicit format, publish/unpublish, link + QR, recipient `api/greeting` | typecheck/build/`npm test` 19/19; local-Supabase desktop Chrome E2E 32/32 ; hosted preview E2E 16/16 | S24 pass (Juan, Nov 16): published greeting opens, AR places, cutout, audio, Replay | PR #10 (base `devin/g2-cutout`), branch `devin/g3-creator` |
 | G4 automatic processing | Not started | Not run | Not run | — |
 | G5 templates/private trial | Not started | Not run | Not run | — |
 
@@ -280,8 +327,8 @@ Add video decode/format, audio start/middle/end, keying/matte edges, Reset/Exit/
 | Resource | Identifier / nonsecret setup reference | Environment | Status |
 | --- | --- | --- | --- |
 | Vercel project | `jc-fractal-studios/web-ar`; posts per-branch previews on PRs | Existing demo + PR previews | Preview for PR #8 ready; protected by Vercel login |
-| Auth / DB | Not provisioned | Planned isolated dev/preview | — |
-| Object storage | Not provisioned | Planned private uploads/outputs | — |
+| Auth / DB | Dedicated Supabase project (to be created by Juan); schema `supabase/migrations/20261116000000_greetings.sql` | G3 preview → production | `webar-greetings` (ref `jqgxymyyxuozmvbujixs`) configured Nov 16 |
+| Object storage | Supabase Storage private bucket `greeting-videos` (created by the migration) | G3 | Created on the hosted project Nov 16 |
 | Processing API/worker | fal.ai `fal-ai/birefnet/v2/video` via `fal-client`; secret name `FAL_KEY` | G2 experiment, run from the Devin VM | Session-only key provided Nov 16 (topped up by Juan); one run, $0.032 |
 | Job recovery trigger | Not selected | G4 | — |
 | Production public base URL | Existing demo default in src/site.ts | Existing site | Reconfirm before publishing |

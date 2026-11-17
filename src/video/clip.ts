@@ -39,7 +39,7 @@ export class VideoClip {
     v.setAttribute('aria-hidden', 'true');
     this.video = v;
     this.local = typeof source !== 'string';
-    this.label = typeof source === 'string' ? source.split('/').pop() ?? source : source.name;
+    this.label = typeof source === 'string' ? source.split('?')[0].split('/').pop() ?? source : source.name;
 
     this.texture = new THREE.VideoTexture(v);
     this.texture.colorSpace = THREE.NoColorSpace;
@@ -66,7 +66,11 @@ export class VideoClip {
       this.set('error', mediaErrorMessage(v.error?.code, this.local));
     });
 
-    if (typeof source === 'string') {
+    if (typeof source === 'string' && /^https?:\/\//.test(source)) {
+      // Stored greeting (signed storage URL): CORS so WebGL may sample the frames.
+      v.crossOrigin = 'anonymous';
+      v.src = source;
+    } else if (typeof source === 'string') {
       v.src = `${import.meta.env.BASE_URL}${source}`;
     } else {
       this.objectUrl = URL.createObjectURL(source);

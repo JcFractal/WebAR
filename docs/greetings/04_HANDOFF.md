@@ -1,9 +1,9 @@
 # AR Greetings — living handoff
-Last updated: November 16, 2026 (G2 accepted on Android; G3 creator MVP passed on the S24, PR #10 awaiting Juan's merge; Devin)
+Last updated: November 17, 2026 (G4 automatic processing built and tested with mocks on `devin/1794878050-g4-processing`; not merged, no paid fal runs; Devin)
 Update this file in every implementation PR and before pausing or switching tools.
 
 ## Current status
-- Stage: **G1–G3 merged to `main` and live in production (Nov 16): #8 `a080019`, #9 `cfdd342`, #10 `d12b269`.** Production https://web-ar-gold.vercel.app/ hosted desktop E2E passed 16/16 on `d12b269`; **production S24 test passed (Juan, Nov 16, 20:08 EST): placement, background removal, playback, audio and Replay.** G4 plan drafted in 03_BUILD_PLAN.md (not started; no paid fal runs without Juan's approval). S24 full flow incl. unpublish passed on the G3 preview. The rest of G1 check 8 (Neon Garden and Cosmic Vortex AR placement, ARCore version) is still not recorded. The earlier AR invisibility no longer reproduces; **its cause is unknown** (see the investigation section).
+- Stage: **G1–G3 merged to `main` and live in production (Nov 16): #8 `a080019`, #9 `cfdd342`, #10 `d12b269`.** Production https://web-ar-gold.vercel.app/ hosted desktop E2E passed 16/16 on `d12b269`; **production S24 test passed (Juan, Nov 16, 20:08 EST): placement, background removal, playback, audio and Replay.** **G4 (automatic processing) built on `devin/1794878050-g4-processing` and tested with mocks only (see the G4 section); not merged, hosted migration not applied, no paid fal runs.** S24 full flow incl. unpublish passed on the G3 preview. The rest of G1 check 8 (Neon Garden and Cosmic Vortex AR placement, ARCore version) is still not recorded. The earlier AR invisibility no longer reproduces; **its cause is unknown** (see the investigation section).
 - iOS / iPhone: **untested.** Juan has no iPhone available. The iPhone milestone (ordinary-playback fallback check and the separate iPhone tracking follow-on) is **deferred** by Juan on 2026-11-14 and does not block Android work. Nothing in G1 or G2 claims iPhone compatibility.
 - Active agent: Devin. G2 (Android cutout proof) assigned by Juan on 2026-11-14 and continues on a new branch from the tested G1 commit; see the G2 section when present.
 - Merges: Juan only. PR #8 stays open until he merges it.
@@ -92,7 +92,42 @@ Juan's priority (Nov 16, ~4 h of access left): a usable Android creator MVP befo
 4. **Done Nov 16:** production S24 test passed (Juan): placement, background removal, playback, audio and Replay all worked. Still open: G1 check 8 particle AR + ARCore version.
 5. **Open review findings (PR #10, escalated):** (a) removing an address from `creator_emails` doesn't stop that owner publishing existing drafts. Fix with a migration adding `is_creator()` to the update policy when `status = 'published'`. (b) Video metadata/readiness is validated in the browser only. Have G4's server worker set `video_*` and publication readiness. Rejected as MVP edge cases: orphaned uploads/rollback after lost responses; pinned base URL vs draft preview (only Production pins it, to the same origin).
 6. Supabase built-in email sends at most 2 confirmation emails/hour. Add custom SMTP before inviting more creators.
-7. Next milestone: G4 per the implementation plan in `03_BUILD_PLAN.md` (G4 section). Needs Juan's decisions listed there before paid runs; then G5 templates/polish.
+7. Next milestone: G4, now built and mock-tested; see the G4 section for the exact pre-merge steps. Paid runs still need Juan's approval; then G5 templates/polish.
+
+## G4 — automatic processing (mock-tested, Nov 17; branch `devin/1794878050-g4-processing`)
+Juan's instruction (Nov 16, 20:13 EST): stay on Supabase Free, enforce the real 50 MB limit, upload directly to private Supabase Storage, benchmark normalize + pack first without fal, never blindly resubmit an uncertain fal submission, reserve budget for in-flight jobs. **Not authorized yet: Supabase upgrade, new hosting account, paid fal runs.** Everything below runs against mocks; integration with real fal is incomplete by definition.
+
+### Timing spike (Vercel preview function, iad1, no fal call; commit `c5209f9`)
+Function: 2 vCPU, ~2,279 MiB memory, ~513 MiB free `/tmp`, bundled `ffmpeg-static` (~80 MB), x264 `veryfast`, normalize and pack as separate calls.
+| Clip | Normalize (ffmpeg / whole call) | Pack (ffmpeg / whole call) | Peak RSS ffmpeg / Node |
+| --- | --- | --- | --- |
+| Juan's G2 clip: 43,245,518 B, 3840×2160 HEVC, rotation −90, 8.56 s | 35.3 s / 39.6 s | 15.7 s / 20.2 s | 294–376 MiB / 117–119 MiB |
+| Synthetic worst case: ~46 MB, 2160×3840 HEVC, 30 s | 78.5 s / 81.8 s | 50.9 s / 59.4 s | 335–367 MiB / 160–169 MiB |
+Validation passed on both: upright 720×1280 at 30 fps (257 and 900 frames), packed 1440×1280 with the same frame count, AAC audio byte-identical to the source (Juan's clip MD5 `9e1d6324c2de6b81922f179fbcb108ca`), duration delta 0, matte non-blank. The spike function (`api/spike-media.ts`) has since been removed; the shared code lives in `api/_lib/media.ts`. Caveat: `veryfast` output has not been checked on the S24.
+
+### What is built
+- **Schema** `supabase/migrations/20261117000000_g4_processing.sql` (applied locally only): server-owned `greetings.media_state/media_error/media_checked_at`, `source_kind` (`prepared`|`ordinary`), `source_path`; `processing_settings` (kill switch, $1.00/day budget, 5 attempts/creator/day, rates); `processing_jobs` (unique `(greeting_id, attempt)`, idempotency key, provider request id/urls, leases, `version` for optimistic updates, one active job per owner); private `greeting-work` bucket; `reserve_processing()` (advisory lock, counts `max(reserved, cost)` of unfinished jobs, so in-flight work holds budget); `greetings_guard()` rewritten so clients can't set media fields, a published greeting needs a **current** creator (fixes PR #10 finding a), and, once `enforce_trusted_media` is switched on, a server-verified video (fixes finding b). `enforce_trusted_media` defaults to **false** so the G3 flow keeps working until it is switched on.
+- **Server** (`api/process.ts`, `api/fal-webhook.ts`, `api/_lib/*`): `start/retry → tick → cancel/verify/delete`. Each `tick` does at most one step: normalize → upload to `greeting-work` → reserve budget → submit → poll/webhook → download matte into `/tmp` (never stored: a real 30 s ProRes matte is ~58 MB) → pack + validate (frames, size, audio MD5, matte non-blank) → store packed MP4 → `ready`; source and temp files are deleted afterwards. Server-side rules (`api/_lib/rules.ts`): ≤ 52,428,800 bytes, 3–30 s, readable MP4/WebM; prepared uploads are re-checked by the server (`verify`).
+- **fal handling** (`api/_lib/provider.ts`, `webhook.ts`): queue submit with webhook URL `…/api/fal-webhook?job=&attempt=`; explicit 4xx = rejected (reservation released); timeout/network/5xx/malformed = **uncertain**: the job keeps its reservation, is never resubmitted, waits up to 30 min for a webhook naming the request, then fails charging the reservation. Webhooks are verified (ED25519 via fal JWKS, ±300 s timestamp, raw-body SHA-256), idempotent, and checked against job/attempt/request id; late webhooks never revive failed, cancelled, deleted or superseded jobs. Polling every 15 s is the fallback; a submitted job times out after 60 min.
+- **Mock provider** (`MOCK_PROVIDER_MODE` = `ok`|`fail`|`reject`|`uncertain`): no network, makes an ellipse matte. Disabled on `VERCEL_ENV=production`, so production can never publish a placeholder cutout.
+- **Creator UI** (`src/greetings/creator.ts`): ordinary upload behind `VITE_ORDINARY_UPLOAD=1` (off in production), client prechecks (50 MiB, 3–30 s), upload progress, stage text (step 1–3), recovery after reload, Cancel processing, Try again, Publish disabled until `media_state = ready`. Delete now goes through the server so provider requests and all files are cleaned up.
+
+### Tests (no fal calls)
+- `npm test`: 31/31 (state machine, leases, uncertain/no-resubmit, polling, cost, 50 MiB boundary, duration/format rules, fal response parsing, webhook signature valid/tampered/stale/wrong-key/missing, mock modes).
+- `npm run test:int` against local Supabase: 10/10 (full mock pipeline, client can't fake `ready`, revoked creator can't publish, prepared verification gate, uncertain submit adopted by webhook with one submit, give-up charging the reservation + late webhook ignored + retry with new idempotency key, in-flight budget refusal before submit, per-creator quota, kill switch, one active job, provider fail/reject, cancel, cross-owner 404s, delete cleans rows and files, bucket refuses 52,428,801 B, bounded download, junk source refused, unsigned webhook 401).
+- Desktop Chrome on local Vite + local Supabase: G3 regression E2E 32/32 (prepared flow unchanged apart from the new server check); G4 ordinary E2E 14/14 (50 MiB refusal, upload progress, stages, reload recovery, publish gating, signed-out recipient plays the 1440×1280 output, cancel → Try again, delete, Cosmic Vortex loads). Bug found and fixed: a repeated `SIGNED_IN` event re-rendered the list and left the processing loop updating a detached list.
+- Not done: hosted preview, real fal run, S24 test of an automatically processed greeting, iOS (deferred).
+
+### Before merging (exact)
+1. Apply `20261117000000_g4_processing.sql` to the hosted project `jqgxymyyxuozmvbujixs` **before** merging: the new code reads `media_state` and calls `/api/process` for verify/delete, so production would break without it. The migration is additive and keeps the G3 flow working (`enforce_trusted_media = false`, ordinary upload hidden).
+2. After the merge deploy: run the prepared-upload smoke (upload → verify → publish → signed-out open → delete) on production, then switch on `enforce_trusted_media` and re-check publishing. Rows that existed before the migration are grandfathered as `media_state = 'ready'`; Juan's existing greeting can be re-checked with `verify` if wanted.
+3. Juan's decisions still pending: number of paid fal runs allowed. To go live: set Vercel env `PROCESSING_PROVIDER=fal`, `FAL_KEY` (sensitive), optionally `PROCESSING_WEBHOOK_BASE=https://web-ar-gold.vercel.app`, and `VITE_ORDINARY_UPLOAD=1`; keep the fal dashboard spend limit as the hard cap.
+4. Then the G4 acceptance run: three real ordinary recordings (1080p, ≤ 30 s, ≤ 50 MB) through upload → processing → preview → publish → signed-out QR → S24 AR.
+
+### Known limits
+- Progress is driven by the creator page (`tick` loop) plus the fal webhook (which also triggers packing). If the webhook is lost and the page is closed, the job continues next time the creator opens `?create`; stale jobs time out. No cron (Vercel Hobby cron runs once a day).
+- 4K phone recordings hit 50 MB after ~10 s; creators should record at 1080p.
+- The fal adapter follows fal's documented queue/webhook contract but has never talked to fal.
 
 ## Milestone tracking
 | Milestone | Code/status | Browser checks | Phone checks | PR / commit |
@@ -100,7 +135,7 @@ Juan's priority (Nov 16, ~4 h of access left): a usable Android creator MVP befo
 | G1 video placement | Complete on Android; merged to main (a080019). Diagnostics and probe kept behind URL flags | typecheck/build/`npm test` 12/12; headless CDP smoke 68/68 (no WebXR) | S24: checks 1–7 pass; check 8 voice part pass, particle AR + ARCore version not recorded. iOS untested (deferred) | PR #8, tested tip 67a13fb |
 | G2 cutout/format proof | Accepted on Android (Nov 16), merged to main (cfdd342): player `packed`/`alpha` modes, `scripts/g2/cutout.py`, synthetic fixtures; one fal run on Juan's real clip ($0.032) | typecheck/build/`npm test` 15/15; headless desktop Chrome renders both synthetic cutouts | Real clip: alpha WebM works in AR (Juan, Nov 16); packed MP4 pending | PR #9 (base `devin/g1-video-placement`), branch `devin/g2-cutout` |
 | G3 creator MVP | Passed on Android (Nov 16); merged to main (d12b269), live in production: Supabase auth/storage, private drafts, explicit format, publish/unpublish, link + QR, recipient `api/greeting` | typecheck/build/`npm test` 19/19; local-Supabase desktop Chrome E2E 32/32 ; hosted preview E2E 16/16 | S24 pass (Juan, Nov 16): published greeting opens, AR places, cutout, audio, Replay | PR #10 (base `devin/g2-cutout`), branch `devin/g3-creator` |
-| G4 automatic processing | Not started | Not run | Not run | — |
+| G4 automatic processing | Built, mock-tested; hosted migration not applied; no paid fal runs | `npm test` 31/31; local-Supabase integration 10/10; local desktop E2E G3 32/32 + G4 14/14 | Not run | Branch `devin/1794878050-g4-processing` (PR pending) |
 | G5 templates/private trial | Not started | Not run | Not run | — |
 
 ## Decision log

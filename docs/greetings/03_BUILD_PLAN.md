@@ -172,6 +172,9 @@ Flow: creator picks an **ordinary** phone video → resumable upload → server 
 ### Prompt
 “Proceed with G4 only. Integrate the measured G2 processor into G3's real upload flow using persistent jobs, idempotency, recovery and output validation. Preserve original audio and published revisions. Demonstrate a real ordinary video through processing, preview and a stable QR into the S24 player; separate simulated tests from Juan's hardware results. Update 04_HANDOFF.md and open a focused PR.”
 
+### Status (Nov 17)
+Built on `devin/1794878050-g4-processing` on Vercel Functions + Supabase Free as planned, after the timing spike passed (normalize ≤ 82 s, pack ≤ 60 s for a 30 s clip). Tested with mocks only; real fal integration and the three-recording acceptance run are pending Juan's approval of paid runs. Details and pre-merge steps: 04_HANDOFF.md, G4 section.
+
 ## G5 — greeting polish and private trial
 ### Implement
 - Plain and Birthday templates sharing the same person video, placement group and transport controls.

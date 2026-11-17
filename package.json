@@ -11,10 +11,13 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/*.test.ts"
+    "test": "node --import ./tests/register.mjs --test tests/*.test.ts",
+    "test:int": "node --import ./tests/register.mjs --test --test-concurrency=1 tests/integration/*.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.117.3",
+    "@vercel/functions": "2.2.13",
+    "ffmpeg-static": "5.3.0",
     "qrcode": "1.5.4",
     "three": "0.185.1"
   },

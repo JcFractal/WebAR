@@ -109,6 +109,66 @@ A real normal MP4 runs upload → processing → preview → publish → signed-
 ### Done when
 Three representative normal recordings meet the spec and G4's entire user flow works. If a provider is mocked or credentials are missing, mark integration incomplete; mocks establish contract behavior only.
 
+### Implementation plan (Nov 16, after G3 shipped)
+Flow: creator picks an **ordinary** phone video → resumable upload → server normalizes → fal matte → server packs → validate → creator previews the draft in the existing player → Publish (only a validated `ready` video can be published). G3's prepared-video upload stays as an alternative path.
+
+**Measured inputs.** G2 run: 8.56 s clip, 56.2 s fal inference at $0.000575/s = **$0.032** (≈6.6 compute-s per clip-second at 1024×1024). Projected: 15 s ≈ $0.06, 30 s ≈ $0.11 per attempt (estimate; record real `metrics.inference_time` per job). VM normalize of the 4K HEVC clip took 8.9 s. The S24 4K clip is **43 MB for 8.6 s (40 Mbit/s)**, so a 30 s 4K clip (~150 MB) exceeds the Supabase Free 50 MB per-file limit (current `fileSizeLimit` = 52428800).
+
+**Processing hosting (recommended: no new service).**
+- Orchestration and media work run as Vercel Functions in `web-ar` (`iad1`, next to Supabase `us-east-1`; fluid compute, 300 s default timeout), with `ffmpeg-static` for normalize/pack. fal does the GPU matting via its queue API.
+- Each step is a short, resumable stage, so no single invocation needs the full 300 s:
+  1. `normalize`: download original by signed URL → upright 720×1280, 30 fps CFR, AAC copy (`cutout.py` logic ported to TS) → `normalized.mp4` in storage.
+  2. `submit`: `POST queue.fal.run/fal-ai/birefnet/v2/video` (model `Matting`, `output_mask`, 1024) with a short-lived signed URL of `normalized.mp4` (no fal upload step) and `fal_webhook=https://web-ar-gold.vercel.app/api/fal-webhook`. Store `request_id`.
+  3. `collect`: on a verified webhook (ED25519 via fal JWKS, ±300 s timestamp, raw-body SHA-256) or a status poll, download the mask immediately (fal media URLs expire) → storage.
+  4. `pack`: colour from `normalized.mp4` + mask → packed H.264/AAC MP4 (original audio stream copied), same as the S24-tested G2 output.
+  5. `validate`: frame count = normalized, duration ±0.05 s, audio present and bit-identical, matte not all-black/all-white, not static. Then `ready`.
+- First G4 task is a **free timing spike**: run normalize + pack in a deployed preview function on Juan's existing G2 clip and mask (no fal call). If 30 s clips exceed ~240 s or memory, fall back to one small container worker (Fly.io / Cloud Run) running `scripts/g2/cutout.py` (new account; Juan decides). GitHub Actions is rejected (public repo logs and personal footage).
+
+**Durable jobs.**
+- New table `processing_jobs`, written only by the service role; owners can read their own:
+  - `id`, `greeting_id`, `revision`, `state`;
+  - `attempt`, `fal_request_id` (unique), `lease_until`;
+  - `error_code`, `user_message`, `inference_seconds`, `cost_usd`, timestamps.
+- `state` moves through `uploaded → normalizing → normalized → submitted → matte_ready → packing → ready | failed | cancelled`.
+- Every transition is a conditional update (`where state = <expected>`), so duplicate webhooks, double clicks and concurrent polls are no-ops.
+- A job belongs to one revision. A late callback for a deleted or superseded revision is ignored, and its files are removed.
+- The greeting keeps `published_video_path`. A new revision never touches the published file until the creator publishes it.
+
+**Progress and error recovery.**
+- **Upload:** Supabase TUS resumable upload (`/storage/v1/upload/resumable`), so phone network drops resume instead of restarting. The progress bar and cancel stay as in G3.
+- **Processing UI:** the page shows a stage list (Uploading → Preparing → Removing background → Finishing → Ready) and polls `GET /api/process?id=` every 5 s. Refreshing or reopening the page resumes from the stored state.
+- **Self-healing polls:** each poll also advances a stalled job. Expired lease → re-run the free stage. `submitted` past 10 min → check the fal status URL, which recovers a missed webhook. Past 30 min → `failed`, cancelling the fal request.
+- **Retry:** free stages retry automatically (max 2). The paid fal step is never auto-resubmitted; the creator taps **Try again**, which counts against quota.
+- **Errors:** creator-facing wording maps from `error_code` (unsupported video, too long, provider busy, processing failed: try again, daily limit reached). Raw errors go to logs only.
+
+**Cost controls.**
+- **Kill switch:** `G4_PROCESSING_ENABLED` env var; when off, only the prepared-video upload works.
+- **Limits:** server-side `ffprobe` enforces 3–30 s **before** any fal call. One active job per creator. Per-creator daily quota (default 5 attempts). Global daily budget (default $1 ≈ 30 × 10 s clips), summed from `cost_usd`. Only allowlisted, confirmed creators.
+- **Idempotency:** one fal submission per (revision, attempt), using a DB uniqueness constraint.
+- **Ledger:** cost recorded per job from fal `metrics.inference_time` × unit price, and shown in the handoff after each test.
+- **Spend limit:** Juan sets a spend limit or low balance on the fal dashboard as the hard cap. `FAL_KEY` is server-only in Vercel (sensitive), never in the browser or Git.
+- **Approval:** paid test runs need Juan's explicit approval with a stated count, e.g. "3 runs".
+- **Retention:** originals, normalized copies and raw masks are deleted 7 days after `ready`. The matte master (fal mask) and the packed output are kept while the greeting exists. Deleting a greeting cancels its job and removes all files.
+
+**Security fixes folded in (from PR #10 review).**
+- Publishing moves to a server endpoint (or a policy check) that requires `is_creator()` and a `ready` job. The client can no longer write `video_*` or `status = 'published'` directly.
+- Removing an address from the allowlist then also blocks publishing.
+
+**Decisions for Juan before G4 starts.**
+1. **Upload size:** either upgrade Supabase to Pro (≈$25/month, raises the per-file limit), or keep Free and tell creators to record at 1080p and keep clips ≤ ~20 s (≈17 Mbit/s → ~45 MB).
+2. **Paid test budget:** approve N fal runs. Three representative clips ≈ $0.10–$0.35 total, plus a fal spend cap.
+3. **Hosting fallback:** OK to create a small container worker account if the Vercel timing spike fails?
+
+**Order of work** (each step is a commit; stop for an S24 test at the end):
+1. Free timing spike on Vercel.
+2. Migration (`processing_jobs`, revisions, publish gate).
+3. TUS upload.
+4. `/api/process` stages + `/api/fal-webhook` with signature tests, mocked fal for contract tests (marked simulated).
+5. Creator progress UI.
+6. Cost controls/kill switch.
+7. One approved real run end to end.
+8. Then the remaining approved runs and Juan's S24 check.
+
 ### Prompt
 “Proceed with G4 only. Integrate the measured G2 processor into G3's real upload flow using persistent jobs, idempotency, recovery and output validation. Preserve original audio and published revisions. Demonstrate a real ordinary video through processing, preview and a stable QR into the S24 player; separate simulated tests from Juan's hardware results. Update 04_HANDOFF.md and open a focused PR.”
 

@@ -1,9 +1,9 @@
 # AR Greetings — living handoff
-Last updated: November 17, 2026 (G4 on `devin/1794878050-g4-processing` passed on the S24, not merged, paid processing disabled; Android polish on `devin/1794885141-android-polish`, preview only, awaiting Juan's S24 check; Devin)
+Last updated: November 17, 2026 (G4 [PR #12] and Android polish [PR #13] both passed on the S24 and are release-ready; not merged; paid processing disabled in production; Devin)
 Update this file in every implementation PR and before pausing or switching tools.
 
 ## Current status
-- Stage: **G1–G3 merged to `main` and live in production (Nov 16): #8 `a080019`, #9 `cfdd342`, #10 `d12b269`.** Production https://web-ar-gold.vercel.app/ hosted desktop E2E passed 16/16 on `d12b269`; **production S24 test passed (Juan, Nov 16, 20:08 EST): placement, background removal, playback, audio and Replay.** **G4 (automatic processing) built on `devin/1794878050-g4-processing` and tested with mocks only (see the G4 section); not merged, no paid fal runs; hosted migration applied Nov 17 and the PR #12 preview passed hosted E2E with the mock provider.** S24 full flow incl. unpublish passed on the G3 preview. The rest of G1 check 8 (Neon Garden and Cosmic Vortex AR placement, ARCore version) is still not recorded. The earlier AR invisibility no longer reproduces; **its cause is unknown** (see the investigation section).
+- Stage: **G1–G3 merged to `main` and live in production (Nov 16): #8 `a080019`, #9 `cfdd342`, #10 `d12b269`.** Production S24 test passed (Juan, Nov 16). **G4 (automatic processing, [PR #12](https://github.com/JcFractal/WebAR/pull/12)) is release-ready (Nov 17):** hosted migration applied, hosted preview E2E passed with the mock provider, one approved real fal run ($0.0281) produced a greeting that **passed on the S24 (Juan, Nov 16, 22:10 EST): cutout, AR placement, audio sync, Replay.** After merge, production keeps the prepared flow only: no `PROCESSING_PROVIDER`, `FAL_KEY` or `VITE_ORDINARY_UPLOAD`, and `/api/process` refuses the mock provider on production. Turning paid processing on needs Juan's explicit approval. The rest of G1 check 8 (Neon Garden and Cosmic Vortex AR placement, ARCore version) is still not recorded.
 - iOS / iPhone: **untested.** Juan has no iPhone available. The iPhone milestone (ordinary-playback fallback check and the separate iPhone tracking follow-on) is **deferred** by Juan on 2026-11-14 and does not block Android work. Nothing in G1 or G2 claims iPhone compatibility.
 - Active agent: Devin. G2 (Android cutout proof) assigned by Juan on 2026-11-14 and continues on a new branch from the tested G1 commit; see the G2 section when present.
 - Merges: Juan only. PR #8 stays open until he merges it.
@@ -16,7 +16,7 @@ Update this file in every implementation PR and before pausing or switching tool
 - Processing provider and media format: G2 in progress (see G2 section). Candidate formats implemented: packed colour|matte MP4 (primary) and native-alpha VP9 WebM (comparison); not yet decided on S24 evidence.
 - Personal test clips: none in Git. The repo contains only a generated synthetic fixture (`public/media/synthetic-greeting.mp4`, made by `scripts/make-synthetic-fixture.py`).
 - Open risk: the invisibility cause was never identified, so it could return; the probe (`&probe&step=…`) and `&diag` readout stay as opt-in references.
-- Next concrete action (G1): Juan reviews and merges PR #8 when satisfied; optionally records check 8 (particle AR on both experiences + ARCore version). Devin does not merge.
+- Next concrete action: Juan merges PR #12 into `main` (merge commit), then retargets the Android polish PR ([PR #13](https://github.com/JcFractal/WebAR/pull/13)) to `main` and merges it; Devin then runs the production smoke test of the prepared flow. Devin does not merge.
 
 ### PR #8 final review summary (G1)
 - Scope: a separate `video` template (`src/video/`), discriminated config union, lazy `loadTemplate`, `ArPlacement` wording only, synthetic fixture and test-fixture gallery section, local MP4 picker (blob URL, not uploaded), opaque/chroma keying, first-frame gate, tap-to-play, Reset/Exit/re-entry, no microphone use for video. Particle configs, swarm code and audio tuning unchanged apart from the config type.
@@ -136,7 +136,7 @@ Validation passed on both: upright 720×1280 at 30 fps (257 and 900 frames), pac
 ### Known limits
 - Progress is driven by the creator page (`tick` loop) plus the fal webhook (which also triggers packing). If the webhook is lost and the page is closed, the job continues next time the creator opens `?create`; stale jobs time out. No cron (Vercel Hobby cron runs once a day).
 - 4K phone recordings hit 50 MB after ~10 s; creators should record at 1080p.
-- The fal adapter follows fal's documented queue/webhook contract but has never talked to fal.
+- The fal adapter has completed one real run (Nov 17); webhook-vs-polling completion for that run was not confirmed.
 
 ## Android polish (Nov 17; branch `devin/1794885141-android-polish`, stacked on G4 / PR #12)
 Requested by Juan after the G4 S24 pass. Playback, keying, AR placement and Replay code are unchanged; only text, layout and a header style were touched.
@@ -146,7 +146,8 @@ Requested by Juan after the G4 S24 pass. Playback, keying, AR placement and Repl
 - **Plain/Birthday style:** `greetings.theme` (`plain` default, or `birthday`) via `20261118000000_greeting_theme.sql`, **already applied to the hosted project** (additive; production G3 code is unaffected and `/api/greeting` on production still returned 200). Birthday adds a "Happy birthday" tag, gradient title and confetti header on the recipient page; the video/AR rendering is the same.
 - **Tests:** `npm test` 31/31, typecheck and build pass. Hosted polish preview with the mock provider, desktop Chrome at phone size: prepared flow 34/34 (incl. Birthday shown to a signed-out recipient), ordinary flow 20/20 (refresh recovery, publish gate, cancel/retry, delete cleanup, 50 MiB limit). Test accounts and files removed afterwards.
 - **Preview env:** branch-scoped Supabase vars and `VITE_ORDINARY_UPLOAD=1` for this branch only; no `PROCESSING_PROVIDER`/`FAL_KEY` (ordinary uploads use the mock matte, not a real cutout). Production unchanged.
-- **Not yet:** Juan's S24 check of the new wording/layout/AR text; iOS untested (deferred). Merge order: PR #12 first, then this PR.
+- **S24 pass (Juan, Nov 16, 22:41 EST) on the polish preview:** placement, playback, audio, mute, Pause and Replay all work. iOS untested (deferred).
+- **Merge order:** PR #12 into `main` first, then change PR #13's base to `main` and merge it (both as merge commits).
 
 ## Milestone tracking
 | Milestone | Code/status | Browser checks | Phone checks | PR / commit |
@@ -154,7 +155,8 @@ Requested by Juan after the G4 S24 pass. Playback, keying, AR placement and Repl
 | G1 video placement | Complete on Android; merged to main (a080019). Diagnostics and probe kept behind URL flags | typecheck/build/`npm test` 12/12; headless CDP smoke 68/68 (no WebXR) | S24: checks 1–7 pass; check 8 voice part pass, particle AR + ARCore version not recorded. iOS untested (deferred) | PR #8, tested tip 67a13fb |
 | G2 cutout/format proof | Accepted on Android (Nov 16), merged to main (cfdd342): player `packed`/`alpha` modes, `scripts/g2/cutout.py`, synthetic fixtures; one fal run on Juan's real clip ($0.032) | typecheck/build/`npm test` 15/15; headless desktop Chrome renders both synthetic cutouts | Real clip: alpha WebM works in AR (Juan, Nov 16); packed MP4 pending | PR #9 (base `devin/g1-video-placement`), branch `devin/g2-cutout` |
 | G3 creator MVP | Passed on Android (Nov 16); merged to main (d12b269), live in production: Supabase auth/storage, private drafts, explicit format, publish/unpublish, link + QR, recipient `api/greeting` | typecheck/build/`npm test` 19/19; local-Supabase desktop Chrome E2E 32/32 ; hosted preview E2E 16/16 | S24 pass (Juan, Nov 16): published greeting opens, AR places, cutout, audio, Replay | PR #10 (base `devin/g2-cutout`), branch `devin/g3-creator` |
-| G4 automatic processing | Built, mock-tested; hosted migration applied (Nov 17); no paid fal runs | `npm test` 31/31; local-Supabase integration 13/13; local desktop E2E G3 32/32 + G4 14/14; hosted preview E2E prepared 33/33 + ordinary (mock) 20/20; production G3 after migration 16/16 | Not run | Branch `devin/1794878050-g4-processing` ([PR #12](https://github.com/JcFractal/WebAR/pull/12)) |
+| G4 automatic processing | Release-ready (Nov 17); hosted migration applied; one real fal run ($0.0281); paid processing off in production | `npm test` 31/31; local-Supabase integration 13/13; local desktop E2E G3 32/32 + G4 14/14; hosted preview E2E prepared 33/33 + ordinary (mock) 20/20; production G3 after migration 16/16 | S24: benchmark packed clip playback pass; real automatically processed greeting pass (cutout, AR placement, audio sync, Replay). iOS untested (deferred) | [PR #12](https://github.com/JcFractal/WebAR/pull/12), branch `devin/1794878050-g4-processing` |
+| Android polish | Release-ready (Nov 17): creator wording, phone layout, progress/error text, AR instructions, Plain/Birthday style (hosted `theme` column applied) | `npm test` 31/31; hosted preview E2E prepared 34/34 + ordinary (mock) 20/20 | S24 pass (Juan, Nov 16): placement, playback, audio, mute, Pause, Replay | [PR #13](https://github.com/JcFractal/WebAR/pull/13), branch `devin/1794885141-android-polish` |
 | G5 templates/private trial | Not started | Not run | Not run | — |
 
 ## Decision log

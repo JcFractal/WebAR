@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import { createClient } from '@supabase/supabase-js';
-import type { Ctx } from './pipeline.ts';
-import { providerFromEnv } from './provider.ts';
+import type { Ctx } from './pipeline.js';
+import { providerFromEnv } from './provider.js';
 
 export function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });

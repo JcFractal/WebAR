@@ -1,4 +1,4 @@
-import { SubmitError, classifySubmit } from './jobs.ts';
+import { SubmitError, classifySubmit } from './jobs.js';
 
 // Background-removal providers. `fal` is real (paid); `mock` runs no network and costs nothing.
 export interface ProviderUrls {

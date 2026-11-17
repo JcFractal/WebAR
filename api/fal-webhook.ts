@@ -1,8 +1,8 @@
 /// <reference types="node" />
 import { waitUntil } from '@vercel/functions';
-import { json, serverCtx } from './_lib/context.ts';
-import { handleWebhook, tick } from './_lib/pipeline.ts';
-import { falJwks, verifyFalSignature } from './_lib/webhook.ts';
+import { json, serverCtx } from './_lib/context.js';
+import { handleWebhook, tick } from './_lib/pipeline.js';
+import { falJwks, verifyFalSignature } from './_lib/webhook.js';
 
 /** fal completion callback: signature-verified, idempotent; packing continues after the 200 reply. */
 export async function POST(request: Request): Promise<Response> {

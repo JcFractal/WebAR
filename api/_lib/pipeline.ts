@@ -4,10 +4,10 @@ import { mkdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { LIMITS, PAID, SubmitError, TERMINAL, costUsd, nextAction, stageLabel, type JobState } from './jobs.ts';
-import { download, mockMatte, normalize, pack, packOk, probe } from './media.ts';
-import type { Provider, ProviderOutcome, ProviderUrls } from './provider.ts';
-import { MAX_BYTES, SECONDS, preparedProblems, sourceProblems, type Format } from './rules.ts';
+import { LIMITS, PAID, SubmitError, TERMINAL, costUsd, nextAction, stageLabel, type JobState } from './jobs.js';
+import { download, mockMatte, normalize, pack, packOk, probe } from './media.js';
+import type { Provider, ProviderOutcome, ProviderUrls } from './provider.js';
+import { MAX_BYTES, SECONDS, preparedProblems, sourceProblems, type Format } from './rules.js';
 
 export const VIDEOS = 'greeting-videos';
 export const WORK = 'greeting-work';

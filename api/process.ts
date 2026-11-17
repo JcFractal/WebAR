@@ -1,6 +1,6 @@
 /// <reference types="node" />
-import { json, serverCtx } from './_lib/context.ts';
-import { HttpError, authUser, cancelJob, deleteGreeting, publicJob, startProcessing, tick, verifyPrepared } from './_lib/pipeline.ts';
+import { json, serverCtx } from './_lib/context.js';
+import { HttpError, authUser, cancelJob, deleteGreeting, publicJob, startProcessing, tick, verifyPrepared } from './_lib/pipeline.js';
 
 const ID = /^[0-9a-f-]{36}$/;
 

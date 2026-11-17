@@ -1,4 +1,4 @@
-import type { MediaInfo } from './media.ts';
+import type { MediaInfo } from './media.js';
 
 // Trusted, server-side media rules (the browser checks the same things only as a convenience).
 export const MAX_BYTES = 50 * 1024 * 1024; // Supabase Free per-file limit (actual project setting).
